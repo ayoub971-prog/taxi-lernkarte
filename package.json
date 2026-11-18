@@ -1,0 +1,12 @@
+{
+  "name": "taxi-lernkarte",
+  "version": "1.0.0",
+  "description": "Taxi-Lernkarte: Orte Wädenswil bis Zürich lernen (PWA, OpenStreetMap, Leaflet lokal)",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "smoke": "node tests/browser-smoke.mjs"
+  }
+}

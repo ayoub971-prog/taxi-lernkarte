@@ -1,0 +1,345 @@
+// Taxi-Lernkarte – Hauptprogramm: Karte, Pins, Orte-Liste, eigene Orte, Sicherung, Navigation.
+// Quiz/Pruefung steckt in quizmode.js, der Fahrmodus in drivemode.js. Beide bekommen das Objekt `ctx`.
+import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=1';
+import { distanceM, formatDistance } from './geo.js?v=1';
+import { createStore, makeBackup, parseBackup } from './store.js?v=1';
+import * as progress from './progress.js?v=1';
+import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=1';
+import { initQuiz } from './quizmode.js?v=1';
+import { initDrive } from './drivemode.js?v=1';
+
+export const APP_VERSION = '1';
+const L = window.L;
+
+// ---------------------------------------------------------------- Speicher
+function safeStorage() {
+  try { const t = '__t'; localStorage.setItem(t, '1'); localStorage.removeItem(t); return localStorage; }
+  catch { const m = {}; return { getItem: (k) => m[k] ?? null, setItem: (k, v) => { m[k] = String(v); } }; } // nur fuer diese Sitzung
+}
+const store = createStore(safeStorage());
+try { navigator.storage?.persist?.(); } catch { /* optional */ }
+
+// ---------------------------------------------------------------- Karte
+const map = L.map('map', { zoomControl: false, zoomSnap: 0.5, maxZoom: 19, minZoom: 9, tap: true });
+L.control.zoom({ position: 'bottomleft', zoomInTitle: 'Vergrössern', zoomOutTitle: 'Verkleinern' }).addTo(map);
+map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, crossOrigin: true, updateInterval: 120, keepBuffer: 4,
+  attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende',
+}).addTo(map);
+map.fitBounds(L.latLngBounds(PLACES.map((p) => [p.lat, p.lng])), { padding: [24, 24] });
+new ResizeObserver(() => map.invalidateSize({ animate: false })).observe($('#stage'));
+
+// ---------------------------------------------------------------- gemeinsames Objekt fuer die Module
+const ownToPlace = (p) => ({ ...p, stufe: 0, type: 'Eigener Ort', address: 'Eigener Ort', own: true });
+const ctx = {
+  L, map, store, progress, mode: 'normal', filter: { stufe: 'alle', weak: false },
+  toast, speak,
+  allPlaces: () => [...PLACES, ...store.state.places.map(ownToPlace)],
+  /** Orte einer Auswahl: 'alle' | '1' | '2' | '3' | 'eigene' */
+  poolFor(sel) {
+    const all = ctx.allPlaces();
+    if (sel === 'eigene') return all.filter((p) => p.own);
+    if (sel === '1' || sel === '2' || sel === '3') return all.filter((p) => p.stufe === Number(sel));
+    return all;
+  },
+  setMode(m) { ctx.mode = m; $('#app').dataset.mode = m; },
+  showView: (v) => showView(v),
+  refresh: () => { renderMarkers(); renderList(); renderBars(); },
+  pinIcon: (p, o) => pinIcon(p, o),
+  onMapClick: null,
+  setMarkersVisible(on) { if (on) { map.addLayer(markerLayer); renderMarkers(); } else map.removeLayer(markerLayer); },
+  setFilter(stufe, weak = false) { ctx.filter = { stufe, weak }; syncChips(); ctx.refresh(); },
+  resize: () => map.invalidateSize({ animate: false }),
+  routesAB: loadRoutesAB,
+  setLabels(on) { store.setSetting('labels', on); applyLabels(); },
+  flyToPlace,
+};
+window.__taxi = ctx;
+
+// ---------------------------------------------------------------- Pins
+function pinIcon(p, { label = true, cls = '' } = {}) {
+  const m = p.own ? 'own' : 'm-' + progress.mastery(store.state.progress, p.id);
+  const node = el('div', { class: `pin ${m} ${label ? '' : 'nolabel'} ${cls}` }, el('span', { class: 'pin-dot' }), el('span', { class: 'pin-label' }, p.label || p.name));
+  return L.divIcon({ html: node, className: '', iconSize: [44, 48], iconAnchor: [22, 46], popupAnchor: [0, -44] });
+}
+
+const markerLayer = L.layerGroup().addTo(map);
+const markers = new Map();
+
+function visiblePlaces() {
+  let list = ctx.poolFor(ctx.filter.stufe);
+  if (ctx.filter.weak) list = list.filter((p) => progress.mastery(store.state.progress, p.id) === 'rot');
+  return list;
+}
+
+function popupNode(p) {
+  const m = progress.mastery(store.state.progress, p.id);
+  const mtxt = { rot: 'noch schwach', gelb: 'unterwegs', gruen: 'sicher' }[m];
+  const n = el('div', {}, el('b', {}, p.name), el('br'),
+    p.own ? null : el('span', {}, `${TYP_ICON[p.type] || '📍'} ${p.type} · Stufe ${p.stufe}`), p.own ? null : el('br'),
+    p.address && !p.own ? el('span', {}, p.address) : null, p.address && !p.own ? el('br') : null,
+    p.note ? el('span', {}, p.note) : null, p.note ? el('br') : null,
+    el('small', {}, p.own ? 'Eigener Ort' : `Lernstand: ${mtxt}`));
+  if (p.own) {
+    n.append(el('br'),
+      el('button', { class: 'pbtn', type: 'button', onclick: () => { map.closePopup(); openPlaceDialog({ place: p }); } }, '✏️ Bearbeiten'),
+      el('button', { class: 'pbtn danger', type: 'button', onclick: () => deletePlace(p) }, '🗑️ Löschen'));
+  }
+  return n;
+}
+
+function renderMarkers() {
+  markerLayer.clearLayers(); markers.clear();
+  if (ctx.mode !== 'normal') return;
+  for (const p of visiblePlaces()) {
+    const mk = L.marker([p.lat, p.lng], { icon: pinIcon(p), title: p.name, keyboard: true, riseOnHover: true });
+    mk.bindPopup(() => popupNode(p), { maxWidth: 280 });
+    markerLayer.addLayer(mk); markers.set(p.id, mk);
+  }
+  requestAnimationFrame(layoutLabels);
+}
+
+/** Beschriftungen, die sich ueberlappen, werden ausgeblendet (zuerst kommende gewinnen). */
+function layoutLabels() {
+  const labels = $$('.pin-label', map.getContainer());
+  labels.forEach((l) => l.classList.remove('hide'));
+  if ($('#map').classList.contains('labels-off')) return;
+  const kept = [];
+  for (const l of labels) {
+    const r = l.getBoundingClientRect();
+    if (kept.some((k) => r.left < k.right && r.right > k.left && r.top < k.bottom && r.bottom > k.top)) l.classList.add('hide'); else kept.push(r);
+  }
+}
+map.on('zoomend moveend', () => { if (ctx.mode === 'normal') layoutLabels(); });
+
+function flyToPlace(p) {
+  showView('karte');
+  const mk = markers.get(p.id);
+  map.flyTo([p.lat, p.lng], 16, { duration: 1 });
+  if (mk) map.once('moveend', () => mk.openPopup());
+}
+
+// ---------------------------------------------------------------- Namen ein/aus
+function applyLabels() {
+  const on = store.state.settings.labels !== false;
+  $('#map').classList.toggle('labels-off', !on);
+  $('#btn-labels').setAttribute('aria-pressed', String(on));
+  layoutLabels();
+}
+$('#btn-labels').addEventListener('click', () => { store.setSetting('labels', !(store.state.settings.labels !== false)); applyLabels(); });
+
+// ---------------------------------------------------------------- Routen A / B (Lernskizze)
+let routesPromise = null;
+function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=1').then((r) => r.json()); }
+const routeLayers = {};
+const ROUTE_STYLE = {
+  A: { color: '#1565c0', weight: 5, title: 'Variante A – Autobahn A3' },
+  B: { color: '#2e7d32', weight: 5, title: 'Variante B – Seestrasse' },
+};
+async function toggleRoute(key) {
+  const btn = $(key === 'A' ? '#btn-route-a' : '#btn-route-b');
+  if (routeLayers[key]) { map.removeLayer(routeLayers[key]); delete routeLayers[key]; }
+  else {
+    try {
+      const data = await loadRoutesAB();
+      const c = data.routes[key].c, pts = [];
+      for (let i = 0; i < c.length; i += 2) pts.push([c[i], c[i + 1]]);
+      const st = ROUTE_STYLE[key];
+      const line = L.polyline(pts, { color: st.color, weight: st.weight, opacity: 0.85, lineJoin: 'round' });
+      const casing = L.polyline(pts, { color: '#fff', weight: st.weight + 4, opacity: 0.8, interactive: false });
+      const grp = L.featureGroup(key === 'B' ? [casing, line] : [casing, line]).addTo(map);
+      line.bindPopup(`<b>${st.title}</b><br>${(data.routes[key].d / 1000).toFixed(1)} km · Lernskizze, keine Prüfungsroute`);
+      routeLayers[key] = grp;
+      map.fitBounds(grp.getBounds(), { padding: [30, 30] });
+    } catch { toast('Route konnte nicht geladen werden.'); }
+  }
+  btn.setAttribute('aria-pressed', String(!!routeLayers[key]));
+  $('#legend').hidden = !Object.keys(routeLayers).length;
+}
+$('#btn-route-a').addEventListener('click', () => toggleRoute('A'));
+$('#btn-route-b').addEventListener('click', () => toggleRoute('B'));
+
+// ---------------------------------------------------------------- Mein Standort + "In der Naehe"
+let locLayer = null;
+$('#btn-locate').addEventListener('click', () => {
+  if (!navigator.geolocation) return toast('Dein Gerät kann den Standort nicht bestimmen.');
+  toast('Standort wird gesucht …');
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+    locLayer?.remove();
+    locLayer = L.layerGroup([L.circle(ll, { radius: pos.coords.accuracy, color: '#1565c0', weight: 1, fillOpacity: 0.08 }),
+      L.circleMarker(ll, { radius: 9, color: '#fff', weight: 3, fillColor: '#1565c0', fillOpacity: 1 })]).addTo(map);
+    map.flyTo(ll, 15, { duration: 1 });
+    showNearby(ll);
+  }, (err) => toast(err.code === 1 ? 'Standort nicht erlaubt. Bitte in den Chrome-Einstellungen freigeben.' : 'Standort nicht gefunden.'),
+  { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 });
+});
+function showNearby(ll) {
+  const near = ctx.allPlaces().map((p) => ({ p, d: distanceM({ lat: ll.lat, lng: ll.lng }, p) })).sort((a, b) => a.d - b.d).slice(0, 3);
+  const box = $('#nearby'); box.replaceChildren(el('h3', {}, 'In der Nähe'),
+    ...near.map(({ p, d }) => el('button', { type: 'button', onclick: () => { box.hidden = true; flyToPlace(p); } }, `${TYP_ICON[p.type] || '📍'} ${p.label || p.name} – ${formatDistance(d)}`)),
+    el('button', { type: 'button', onclick: () => { box.hidden = true; } }, '✕ Schliessen'));
+  box.hidden = false;
+}
+ctx.showNearby = showNearby;
+
+// ---------------------------------------------------------------- Eigene Orte: Dialog, Langdruck
+const dlgPlace = $('#dlg-place');
+let editing = null;
+function openPlaceDialog({ latlng, place }) {
+  editing = place ? { id: place.id, lat: place.lat, lng: place.lng } : { lat: latlng.lat, lng: latlng.lng };
+  $('#dlg-place-title').textContent = place ? 'Ort bearbeiten' : 'Neuer Ort';
+  $('#in-name').value = place?.name ?? ''; $('#in-note').value = place?.note ?? '';
+  $('#in-coords').textContent = `Lage: ${editing.lat.toFixed(5)}, ${editing.lng.toFixed(5)}`;
+  dlgPlace.showModal(); setTimeout(() => $('#in-name').focus(), 50);
+}
+$('#form-place').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('#in-name').value.trim(); if (!name) return;
+  const data = { name, note: $('#in-note').value, lat: editing.lat, lng: editing.lng };
+  const saved = editing.id ? store.updatePlace(editing.id, data) : store.addPlace(data);
+  dlgPlace.close();
+  if (!saved) return toast('Speichern nicht möglich.');
+  ctx.refresh(); toast(editing.id ? 'Gespeichert.' : `«${saved.name}» gespeichert.`);
+});
+$('#place-cancel').addEventListener('click', () => dlgPlace.close());
+async function deletePlace(p) {
+  map.closePopup();
+  if (await confirmDialog(`«${p.name}» löschen?`, 'Löschen')) { store.removePlace(p.id); store.mutateProgress((pr) => { delete pr[p.id]; }); ctx.refresh(); toast('Gelöscht.'); }
+}
+
+// Langer Druck (ca. 0.6 s) auf die Karte -> neuer Ort. Eigene Erkennung, weil das native
+// "contextmenu" bei Finger und S Pen nicht ueberall gleich ausgeloest wird.
+let press = null, suppressUntil = 0;
+const cont = map.getContainer();
+const cancelPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
+cont.addEventListener('pointerdown', (e) => {
+  cancelPress();
+  if (!e.isPrimary || ctx.mode !== 'normal' || e.target.closest('.leaflet-control, .leaflet-marker-icon, .leaflet-popup')) return;
+  const ev = { clientX: e.clientX, clientY: e.clientY };
+  press = { x: e.clientX, y: e.clientY, timer: setTimeout(() => {
+    press = null; suppressUntil = Date.now() + 900;
+    openPlaceDialog({ latlng: map.mouseEventToLatLng(ev) });
+  }, 600) };
+});
+cont.addEventListener('pointermove', (e) => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress(); });
+['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => cont.addEventListener(t, cancelPress));
+map.on('zoomstart movestart', cancelPress);
+cont.addEventListener('contextmenu', (e) => e.preventDefault());
+map.on('contextmenu', (e) => { if (ctx.mode === 'normal' && Date.now() > suppressUntil) openPlaceDialog({ latlng: e.latlng }); });
+map.on('click', (e) => { if (Date.now() > suppressUntil && ctx.onMapClick) ctx.onMapClick(e); });
+
+// ---------------------------------------------------------------- Orte-Liste, Filter, Fortschritt
+function syncChips() {
+  $$('#chips .chip[data-f]').forEach((c) => c.classList.toggle('on', c.dataset.f === ctx.filter.stufe));
+  $('#chips .chip.weak').setAttribute('aria-pressed', String(ctx.filter.weak));
+}
+$('#chips').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  if (c.dataset.weak) ctx.setFilter(ctx.filter.stufe, !ctx.filter.weak); else ctx.setFilter(c.dataset.f, ctx.filter.weak);
+});
+$('#search').addEventListener('input', renderList);
+
+function renderList() {
+  const list = filterPlaces(visiblePlaces(), $('#search').value);
+  const ul = $('#place-list'); ul.replaceChildren();
+  for (const p of list) {
+    const m = p.own ? 'own' : progress.mastery(store.state.progress, p.id);
+    const sub = p.own ? 'Eigener Ort' : `Stufe ${p.stufe} · ${p.type}`;
+    const li = el('li', {}, el('button', { class: 'item', type: 'button', onclick: () => flyToPlace(p) },
+      el('span', { class: `dot ${m}` }), el('span', {}, el('span', { class: 'name' }, p.name), el('span', { class: 'sub' }, sub))));
+    if (p.own) { li.firstChild.append(el('span', { class: 'edit', role: 'button', 'aria-label': 'Bearbeiten', onclick: (e) => { e.stopPropagation(); openPlaceDialog({ place: p }); } }, '✏️')); }
+    ul.append(li);
+  }
+  $('#place-empty').hidden = list.length > 0;
+}
+
+function renderBars() {
+  const box = $('#progress-bars'); box.replaceChildren();
+  const rows = [['Stufe 1', ctx.poolFor('1')], ['Stufe 2', ctx.poolFor('2')], ['Stufe 3', ctx.poolFor('3')]];
+  if (store.state.places.length) rows.push(['Eigene', ctx.poolFor('eigene')]);
+  for (const [lab, pool] of rows) {
+    const s = progress.summary(pool, store.state.progress);
+    const w = (n) => `${s.n ? (n / s.n) * 100 : 0}%`;
+    box.append(el('div', { class: 'prog' }, el('span', { class: 'lab' }, `${lab} · ${s.gruen}/${s.n} sicher`),
+      el('span', { class: 'bar' }, el('i', { class: 'g', style: `width:${w(s.gruen)}` }), el('i', { class: 'y', style: `width:${w(s.gelb)}` }), el('i', { class: 'r', style: `width:${w(s.rot)}` })),
+      el('span', { class: 'pct' }, `${s.pct} %`)));
+  }
+  const qp = $('#quiz-progress');
+  if (qp) { const s = progress.summary(ctx.poolFor($('#quiz-stufe').value), store.state.progress); qp.textContent = `${s.gruen} von ${s.n} Orten sicher (grün), ${s.gelb} unterwegs (gelb), ${s.rot} schwach (rot).`; }
+  const hb = $('#btn-heute');
+  if (hb) hb.textContent = `☀️ Heute üben (${progress.dueTodayCount(ctx.allPlaces(), store.state.progress, 10)} Fragen)`;
+}
+
+// ---------------------------------------------------------------- Navigation
+const PANELS = { orte: '#panel-orte', quiz: '#panel-quiz', fahren: '#panel-fahren', mehr: '#panel-mehr' };
+function showView(v) {
+  if (v !== 'karte') { ctx.quiz?.stop(); }
+  if (v !== 'karte' && v !== 'fahren') { ctx.drive?.stop(); }
+  if (v === 'fahren' && ctx.drive?.isActive()) v = 'karte';
+  $('#app').dataset.view = v;
+  for (const [k, sel] of Object.entries(PANELS)) $(sel).hidden = k !== v;
+  if (v === 'orte') { renderList(); renderBars(); }
+  if (v === 'quiz') { renderBars(); renderQuizStats(); }
+  if (v === 'karte') setTimeout(() => { map.invalidateSize({ animate: false }); layoutLabels(); }, 0);
+}
+$$('#nav .nav-btn').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
+
+function renderQuizStats() {
+  const s = store.state.stats; const parts = [];
+  if (s.ueben_wo) parts.push(`Wo ist …?: Bestwert ${s.ueben_wo.best} %`);
+  if (s.ueben_name) parts.push(`Welcher Ort?: Bestwert ${s.ueben_name.best} %`);
+  if (s.pruefen) parts.push(`Prüfen: Bestwert ${s.pruefen.best} %`);
+  $('#quiz-stats').textContent = parts.join(' · ');
+}
+ctx.renderQuizStats = renderQuizStats;
+$('#quiz-stufe').addEventListener('change', renderBars);
+
+// ---------------------------------------------------------------- Einstellungen (Fahren)
+$('#set-questions').checked = store.state.settings.questions !== false;
+$('#set-voice').checked = !!store.state.settings.voice;
+$('#set-questions').addEventListener('change', (e) => store.setSetting('questions', e.target.checked));
+$('#set-voice').addEventListener('change', (e) => store.setSetting('voice', e.target.checked));
+
+// ---------------------------------------------------------------- Sicherung (JSON)
+const backupMsg = (t) => { $('#backup-msg').textContent = t; };
+$('#btn-export').addEventListener('click', () => {
+  const blob = new Blob([makeBackup(store.state)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href: url, download: `taxi-lernkarte-sicherung-${new Date().toISOString().slice(0, 10)}.json` });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  backupMsg(`Gespeichert: ${store.state.places.length} eigene Orte, Lernstand inklusive. Die Datei liegt im Ordner «Downloads».`);
+});
+$('#btn-import').addEventListener('click', () => $('#file-import').click());
+$('#file-import').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const r = parseBackup(await f.text());
+  if (r.error) return backupMsg(r.error);
+  const res = store.importPlaces(r.places);
+  store.mutateProgress((pr) => { for (const [id, e2] of Object.entries(r.progress)) if (!pr[id] || (e2.right + e2.wrong) > (pr[id].right + pr[id].wrong)) pr[id] = e2; });
+  store.mutateRepeat((rep) => { for (const [k, v] of Object.entries(r.repeat)) if (!rep[k]) rep[k] = v; });
+  ctx.refresh();
+  backupMsg(`Geladen: ${res.added} neue Orte${res.skipped ? `, ${res.skipped} übersprungen (schon vorhanden oder ungültig)` : ''}. Lernstand zusammengeführt.`);
+});
+$('#btn-reset').addEventListener('click', async () => {
+  if (await confirmDialog('Lernfortschritt (Ampelfarben, Wiederholungen, Bestwerte) wirklich zurücksetzen? Eigene Orte bleiben.', 'Zurücksetzen')) { store.resetProgress(); ctx.refresh(); backupMsg('Lernfortschritt zurückgesetzt.'); }
+});
+$('#app-version').textContent = APP_VERSION;
+
+// ---------------------------------------------------------------- Offline-Hinweis, Start
+const updateOnline = () => { $('#offline').hidden = navigator.onLine; };
+addEventListener('online', updateOnline); addEventListener('offline', updateOnline); updateOnline();
+
+ctx.quiz = initQuiz(ctx);
+ctx.drive = initDrive(ctx);
+applyLabels(); renderMarkers(); renderList(); renderBars(); showView('karte');
+
+if (!store.state.settings.introSeen) {
+  const dlg = $('#dlg-intro'); dlg.addEventListener('close', () => store.setSetting('introSeen', true));
+  setTimeout(() => dlg.showModal(), 300);
+}
+
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => { /* ohne SW laeuft die App trotzdem, nur nicht offline */ }));
+}
