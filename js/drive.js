@@ -3,8 +3,8 @@
 //
 // Routenformat (aus data/*.json, gebaut von tools/fetch-routes.mjs):
 //   { c: [lat,lng,lat,lng,...], st: [[meter, name, ref, typ, richtung, ausfahrt, entscheidung], ...], d: meter, t: sekunden }
-import { distanceM } from './geo.js?v=2';
-import { shuffle, makeOptions } from './quiz.js?v=2';
+import { distanceM } from './geo.js?v=3';
+import { shuffle, makeOptions } from './quiz.js?v=3';
 
 /** Basisgeschwindigkeit in m/s bei 1x (50 km/h). */
 export const BASE_SPEED = 50 / 3.6;

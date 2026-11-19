@@ -35,6 +35,7 @@ Live: <https://ayoub971-prog.github.io/taxi-lernkarte/>
   * **Anzeige:** Strassenname, «📍 bei <Ort>», Tempo in km/h, **Tempolimit nur wenn OSM ein `maxspeed` hat** (rotes Schild, blinkt bei zu schnell), Pfeil und Luftlinie zum Ziel, Zeit, Fehler.
   * **Missionen:** «Fahre zum Paradeplatz» (Ziel wählbar oder zufällig, schwache Orte kommen öfter). Bei der Ankunft gibt es **Punkte und 1–3 Sterne** (Zeit, Fehler, Hinweise, Rasen). «Neu berechnen» zeigt den kürzesten Weg 12 s lang (−150 Punkte). Falsch abgebogen = Fehler. Wer 2+ Sterne holt, macht den Zielort im Lernstand sicherer, sonst bleibt er «schwach» (Wiederholung).
   * **Übersicht:** «🗺️ Karte» pausiert, wechselt in die 2D-Karte (frei zoomen/verschieben), zeigt Auto, Ziel und auf Wunsch den kürzesten Weg. «Weiterfahren» bringt die Kamera genau zurück. Optional **Minikarte** in der Ecke (Pause-Menü).
+  * **Karte zoomen während der Fahrt** (Fahrmodus und Spielmodus): grosse **+ / −**-Knöpfe links (mind. 58 px, 64 px auf dem iPad), **Zwei-Finger-Pinch** auf der Karte, Mausrad und Tasten **+ / − / 0**. Die Kamera folgt dem Taxi weiter und behält den gewählten Zoom (ein Zuschlag auf den Standardzoom, Bereich Zoom 12–18, wird im Gerät gemerkt). «Standard» setzt zurück. Die Übersichtskarte funktioniert wie bisher.
   * Spieltempo ×1–4 (Pause-Menü), Ton (Piepser, standardmässig aus), Pause-Menü.
 * **Eigene Orte**: lange auf die Karte drücken (ca. 0.6 Sekunden) → Name und Notiz → speichern. Bearbeiten und Löschen im Popup. Sie sind auch im Quiz dabei.
 * **Mein Standort** (Geolocation) mit Liste «In der Nähe» (die drei nächsten Lernorte).
@@ -99,6 +100,7 @@ Nur HTML, CSS und ES-Module, keine Build-Schritte, keine Abhängigkeiten ausser 
 | `js/labels.js` | grosse Namen: vier Plätze pro Pin, Überlappungen vermeiden (für Leaflet und MapLibre) |
 | `js/game.js`, `js/gamemode.js`, `js/controls.js` | Spielmodus: Graph, Fahrphysik, Missionen, Dijkstra (rein, Node-getestet) · Bedienung/HUD/Menüs · Eingabe (Touch, Tastatur, Gamepad) |
 | `js/overview.js` | Übersichtskarte und Minikarte (Fahr- und Spielmodus) |
+| `js/zoomctl.js` | Zoom während der Fahrt: Knöpfe, Pinch, Mausrad, Tasten, Zuschlag `settings.driveZoom` |
 | `js/store.js` | localStorage, JSON-Sicherung |
 | `js/ui.js` | kleine DOM-Helfer, Sprachausgabe |
 | `sw.js`, `manifest.webmanifest` | Offline und Installation |

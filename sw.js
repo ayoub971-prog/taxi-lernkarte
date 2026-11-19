@@ -5,7 +5,7 @@
 //  - 3D-Ansicht: Vektorkacheln, Stil, Schriften und Symbole von tiles.openfreemap.org werden ebenfalls nur gemerkt, wenn du sie
 //    angesehen hast (max. 600 Dateien, 7 Tage). Auch hier: kein Vorab-Laden.
 // NEUE VERSION VEROEFFENTLICHEN: VERSION erhoehen (am einfachsten: node tools/bump-version.mjs 2).
-const VERSION = '2';
+const VERSION = '3';
 const SHELL = `taxi-lernkarte-shell-v${VERSION}`;
 const TILES = 'taxi-lernkarte-tiles';
 const MAX_TILES = 400;
@@ -14,14 +14,14 @@ const MAX_VTILES = 600;
 const TILE_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
 
 const ASSETS = [
-  './', 'index.html', 'styles.css?v=2', 'manifest.webmanifest?v=2',
-  'icons/icon.svg?v=2', 'icons/icon-192.png?v=2', 'icons/icon-512.png?v=2', 'icons/icon-maskable-512.png?v=2',
-  'vendor/leaflet/leaflet.css?v=2', 'vendor/leaflet/leaflet.js?v=2',
+  './', 'index.html', 'styles.css?v=3', 'manifest.webmanifest?v=3',
+  'icons/icon.svg?v=3', 'icons/icon-192.png?v=3', 'icons/icon-512.png?v=3', 'icons/icon-maskable-512.png?v=3',
+  'vendor/leaflet/leaflet.css?v=3', 'vendor/leaflet/leaflet.js?v=3',
   'vendor/leaflet/images/layers.png', 'vendor/leaflet/images/layers-2x.png', 'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-icon-2x.png', 'vendor/leaflet/images/marker-shadow.png',
-  'js/app.js?v=2', 'js/places.js?v=2', 'js/geo.js?v=2', 'js/quiz.js?v=2', 'js/store.js?v=2', 'js/progress.js?v=2', 'js/repeat.js?v=2',
-  'js/drive.js?v=2', 'js/drivemode.js?v=2', 'js/map3d.js?v=2', 'js/labels.js?v=2', 'js/game.js?v=2', 'js/gamemode.js?v=2', 'js/overview.js?v=2', 'js/controls.js?v=2', 'js/quizmode.js?v=2', 'js/ui.js?v=2',
-  'vendor/maplibre/maplibre-gl.css?v=2', 'vendor/maplibre/maplibre-gl.js?v=2',
-  'data/routes-ab.json?v=2', 'data/pairs.json?v=2', 'data/graph.json?v=2',
+  'js/app.js?v=3', 'js/places.js?v=3', 'js/geo.js?v=3', 'js/quiz.js?v=3', 'js/store.js?v=3', 'js/progress.js?v=3', 'js/repeat.js?v=3',
+  'js/drive.js?v=3', 'js/drivemode.js?v=3', 'js/map3d.js?v=3', 'js/labels.js?v=3', 'js/game.js?v=3', 'js/gamemode.js?v=3', 'js/overview.js?v=3', 'js/zoomctl.js?v=3', 'js/controls.js?v=3', 'js/quizmode.js?v=3', 'js/ui.js?v=3',
+  'vendor/maplibre/maplibre-gl.css?v=3', 'vendor/maplibre/maplibre-gl.js?v=3',
+  'data/routes-ab.json?v=3', 'data/pairs.json?v=3', 'data/graph.json?v=3',
 ];
 
 self.addEventListener('install', (e) => {

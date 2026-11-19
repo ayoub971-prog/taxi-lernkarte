@@ -1,18 +1,19 @@
 // Taxi-Lernkarte – Hauptprogramm: Karte, Pins, Orte-Liste, eigene Orte, Sicherung, Navigation.
 // Quiz/Pruefung steckt in quizmode.js, der Fahrmodus in drivemode.js. Beide bekommen das Objekt `ctx`.
-import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=2';
-import { distanceM, formatDistance } from './geo.js?v=2';
-import { createStore, makeBackup, parseBackup } from './store.js?v=2';
-import * as progress from './progress.js?v=2';
-import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=2';
-import { initQuiz } from './quizmode.js?v=2';
-import { initDrive } from './drivemode.js?v=2';
-import { initGame } from './gamemode.js?v=2';
-import { initOverview } from './overview.js?v=2';
-import { initMap3d } from './map3d.js?v=2';
-import { layoutLabels, labelPriority } from './labels.js?v=2';
+import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=3';
+import { distanceM, formatDistance } from './geo.js?v=3';
+import { createStore, makeBackup, parseBackup } from './store.js?v=3';
+import * as progress from './progress.js?v=3';
+import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=3';
+import { initQuiz } from './quizmode.js?v=3';
+import { initDrive } from './drivemode.js?v=3';
+import { initGame } from './gamemode.js?v=3';
+import { initOverview } from './overview.js?v=3';
+import { initZoomCtl } from './zoomctl.js?v=3';
+import { initMap3d } from './map3d.js?v=3';
+import { layoutLabels, labelPriority } from './labels.js?v=3';
 
-export const APP_VERSION = '2';
+export const APP_VERSION = '3';
 const L = window.L;
 
 // ---------------------------------------------------------------- Speicher
@@ -183,7 +184,7 @@ $('#btn-labels').addEventListener('click', () => { store.setSetting('labels', !(
 
 // ---------------------------------------------------------------- Routen A / B (Lernskizze)
 let routesPromise = null;
-function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=2').then((r) => r.json()); }
+function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=3').then((r) => r.json()); }
 const routeLayers = {};
 const ROUTE_STYLE = {
   A: { color: '#1565c0', weight: 5, title: 'Variante A – Autobahn A3' },
@@ -395,6 +396,7 @@ addEventListener('online', updateOnline); addEventListener('offline', updateOnli
 
 ctx.quiz = initQuiz(ctx);
 ctx.overview = initOverview(ctx);
+ctx.zoomctl = initZoomCtl(ctx);
 ctx.drive = initDrive(ctx);
 ctx.game = initGame(ctx);
 applyLabels(); renderMarkers(); renderList(); renderBars(); showView('karte'); syncViewBtn(); applyView();

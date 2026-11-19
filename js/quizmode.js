@@ -1,11 +1,11 @@
 // Ueben und Pruefen: Lernen -> Ueben -> Pruefen (pro Stufe), "Heute ueben" und Stufe 4 (Pruefungsaufgabe
 // mit "Callen": Route Strasse fuer Strasse aufdecken). Fortschritt: progress.js, Fehlerliste: repeat.js.
-import { distanceM, formatDistance, scorePoints, isHit, verdict } from './geo.js?v=2';
-import { shuffle, makeOptions } from './quiz.js?v=2';
-import * as progress from './progress.js?v=2';
-import { recordWrong, recordRight, dueKeys } from './repeat.js?v=2';
-import { prepRoute, streetGroups, slice } from './drive.js?v=2';
-import { $, el, toast, speak } from './ui.js?v=2';
+import { distanceM, formatDistance, scorePoints, isHit, verdict } from './geo.js?v=3';
+import { shuffle, makeOptions } from './quiz.js?v=3';
+import * as progress from './progress.js?v=3';
+import { recordWrong, recordRight, dueKeys } from './repeat.js?v=3';
+import { prepRoute, streetGroups, slice } from './drive.js?v=3';
+import { $, el, toast, speak } from './ui.js?v=3';
 
 export function initQuiz(ctx) {
   const { L, map, store } = ctx;
@@ -117,7 +117,7 @@ export function initQuiz(ctx) {
 
   // ------------------------------------------------------------ Stufe 4: Pruefungsaufgabe + "Callen"
   let pairsPromise = null;
-  const loadPairs = () => (pairsPromise ??= fetch('data/pairs.json?v=2').then((r) => r.json()));
+  const loadPairs = () => (pairsPromise ??= fetch('data/pairs.json?v=3').then((r) => r.json()));
 
   /** Waehlt eine Aufgabe: schwache (faellige) zuerst, sonst zufaellig. Gibt {key, a, b, route} oder null. */
   async function pickPair() {

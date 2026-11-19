@@ -2,10 +2,10 @@
 // ist stark herangezoomt und dreht sich in Fahrtrichtung (CSS-Drehung des Karten-Containers).
 // Oben ein Navi-Balken (Strasse, naechster Abbieger, Distanz), unten Steuerung, dazwischen
 // Pruefungsfragen ("Wohin geht es?", "Welcher Ort kommt als Naechstes?"). Alles ist Simulation.
-import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=2';
-import { recordWrong, recordRight, allKeys } from './repeat.js?v=2';
-import { formatDistance } from './geo.js?v=2';
-import { $, el, toast, speak } from './ui.js?v=2';
+import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=3';
+import { recordWrong, recordRight, allKeys } from './repeat.js?v=3';
+import { formatDistance } from './geo.js?v=3';
+import { $, el, toast, speak } from './ui.js?v=3';
 
 export function initDrive(ctx) {
   const { L, map, store, gl } = ctx;
@@ -103,7 +103,7 @@ export function initDrive(ctx) {
     d.heading = first ? target : (d.heading + angleDiff(d.heading, target) * Math.min(1, dt * 4) + 360) % 360;
     if (gl.active) gl.follow(pos.lat, pos.lng, d.heading, zoomFor3d(d.mul), geo.W, geo.H, geo.cx, geo.cy);
     else {
-      map.setView([pos.lat, pos.lng], zoomFor(d.mul), { animate: false });
+      map.setView([pos.lat, pos.lng], ctx.zoomctl.zoom(zoomFor(d.mul)), { animate: false });
       mapEl.style.transform = `rotate(${-d.heading}deg)`;
     }
     if (first || now - d.hudAt > 200) { d.hudAt = now; updateHud(); }
@@ -182,6 +182,7 @@ export function initDrive(ctx) {
   addEventListener('resize', () => { if (d && !ctx.forceOverview) layoutDrive(); });
   // 2D <-> 3D waehrend der Fahrt: Layout und Kamera neu setzen
   ctx.viewListeners.push(() => { if (d && !ctx.forceOverview) { layoutDrive(); frame(true); } });
+  setTimeout(() => ctx.zoomctl.onChange(() => { if (d && !ctx.forceOverview) frame(false, 0, performance.now()); }), 0);
   // Uebersichtskarte (pausiert die Fahrt) und Minikarte
   function openOverview() {
     if (!d || d.pending || d.finished) return toast(d?.pending ? 'Erst die Frage beantworten.' : 'Die Fahrt ist zu Ende.');

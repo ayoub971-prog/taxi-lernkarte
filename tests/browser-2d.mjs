@@ -82,6 +82,78 @@ await step('Spiel: Minikarte, Pause-Menue, Tastatur', async () => {
   await ev(`__taxi.game.stop(true)`);
 });
 
+
+const zrects = () => ev(`const R = (s) => document.querySelector(s).getBoundingClientRect(); const bs = ['in', 'out'].map((k) => R('#zoom-ctl [data-z=' + k + ']'));
+  return { w: Math.min(...bs.map((r) => Math.min(r.width, r.height))), box: R('#zoom-ctl') && (({ left, top, right, bottom }) => ({ left, top, right, bottom }))(R('#zoom-ctl')), iw: innerWidth, ih: innerHeight }`);
+const clashWith = (sels) => ev(`const z = document.querySelector('#zoom-ctl').getBoundingClientRect();
+  return ${JSON.stringify(sels)}.filter((s) => { const e = document.querySelector(s); if (!e) return false; const cs = getComputedStyle(e); if (cs.display === 'none' || e.hidden || cs.visibility === 'hidden') return false; const r = e.getBoundingClientRect(); return r.width > 0 && Math.min(r.right, z.right) - Math.max(r.left, z.left) > 1 && Math.min(r.bottom, z.bottom) - Math.max(r.top, z.top) > 1; })`);
+const zoomNow = () => ev(`return __taxi.map.getZoom()`);
+const GAME_PARTS = ['#minimap', '[data-pad=left]', '[data-pad=right]', '[data-pad=gas]', '[data-pad=brake]', '[data-pad=uturn]', '[data-pad=hint]', '[data-pad=pause]', '[data-pad=map]', '.g-speed', '.g-street b', '.g-street small', '#g-junction', '.g-mission'];
+const DRIVE_PARTS = ['#minimap', '#drive-hud', '#drive-bottom', '#drv-map', '#drv-mm', '#drv-3d', '#car', '#drive-q'];
+
+await step('Zoom im Spielmodus: Plus/Minus, Pinch, Mausrad, Taste; Kamera folgt und behaelt den Zoom; wird gemerkt; Standard-Knopf', async () => {
+  await viewport(915, 412, 2); await sleep(300);
+  await ev(`localStorage.removeItem('x'); __taxi.zoomctl.reset()`);
+  await ev(`__taxi.game.start({ targetId: 'paradeplatz', startId: 'buerkliplatz' })`);
+  await waitFor('!document.querySelector("#game-menu").hidden', 30000); await click('[data-act=go]');
+  const zr = await zrects(); assert.ok(zr.w >= 56, 'Zoom-Knoepfe zu klein: ' + zr.w);
+  assert.deepEqual(await clashWith(GAME_PARTS), [], 'Zoom-Knoepfe ueberdecken');
+  assert.equal(await zoomNow(), 18, 'Start-Zoom im Stand');
+  await click('#zoom-ctl [data-z=out]'); await click('#zoom-ctl [data-z=out]'); await click('#zoom-ctl [data-z=out]'); await sleep(500);
+  assert.equal(await ev(`return __taxi.zoomctl.delta()`), -1.5); assert.equal(await zoomNow(), 16.5);
+  assert.equal(await ev(`return !document.querySelector('#zoom-ctl [data-z=reset]').hidden`), true, 'Standard-Knopf fehlt');
+  // Kamera folgt weiter (Auto faehrt), Zoom bleibt gewaehlt (Tempo aendert den Standard, Zuschlag bleibt)
+  const gas = { ...(await padBtn('gas')), id: 1 }; await touch('touchStart', [gas]); await waitFor('__taxi.game.state().car.odo > 40', 30000);
+  const c = await ev(`const g = __taxi.game.state(); return { odo: g.car.odo, d: __taxi.zoomctl.delta(), z: __taxi.map.getZoom(), cx: __taxi.map.getCenter().lat }`);
+  assert.equal(c.d, -1.5); assert.ok(c.z <= 17 && c.z >= 14.5, 'Zoom beim Fahren ' + c.z);
+  await touch('touchEnd', []); await ev(`__taxi.game.state().car.v = 0`); await sleep(500);
+  // Pinch (zwei Finger auseinander) auf freier Kartenflaeche
+  const cx = 640, cy = 150;
+  await touch('touchStart', [{ x: cx - 40, y: cy, id: 11 }, { x: cx + 40, y: cy, id: 12 }]);
+  for (let i = 1; i <= 8; i++) { await touch('touchMove', [{ x: cx - 40 - i * 10, y: cy, id: 11 }, { x: cx + 40 + i * 10, y: cy, id: 12 }]); await sleep(30); }
+  await touch('touchEnd', []); await sleep(400);
+  const dp = await ev(`return __taxi.zoomctl.delta()`); assert.ok(dp >= -0.25 && dp <= 0.75, 'Pinch-Zuschlag ' + dp);
+  const before = await ev(`return __taxi.zoomctl.delta()`);
+  await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 500, y: 150, deltaX: 0, deltaY: -120 }); await sleep(300);
+  assert.ok((await ev(`return __taxi.zoomctl.delta()`)) > before, 'Mausrad');
+  const b2 = await ev(`return __taxi.zoomctl.delta()`);
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: '-', code: 'Minus', text: '-' }); await send('Input.dispatchKeyEvent', { type: 'keyUp', key: '-', code: 'Minus' }); await sleep(200);
+  assert.ok((await ev(`return __taxi.zoomctl.delta()`)) < b2, 'Taste -');
+  for (let i = 0; i < 14; i++) await ev(`__taxi.zoomctl.step(-0.5)`);
+  assert.ok((await zoomNow()) >= 12 && (await ev(`return __taxi.zoomctl.delta()`)) === -5, 'Untergrenze'); await sleep(300);
+  for (let i = 0; i < 20; i++) await ev(`__taxi.zoomctl.step(0.5)`);
+  assert.ok((await zoomNow()) <= 18, 'Obergrenze');
+  await click('#zoom-ctl [data-z=out]'); await sleep(200);
+  assert.equal(await ev(`return JSON.parse(localStorage.getItem('taxi-lernkarte-v1')).settings.driveZoom`), 1.5, 'nicht gemerkt');
+  await shot('/../v3/01-spiel-zoom-knoepfe-quer', 800);
+  await click('#zoom-ctl [data-z=reset]'); await sleep(300);
+  assert.equal(await ev(`return __taxi.zoomctl.delta()`), 0); assert.equal(await ev(`return document.querySelector('#zoom-ctl [data-z=reset]').hidden`), true);
+  await ev(`__taxi.game.stop(true)`);
+});
+
+await step('Zoom im Fahrmodus: Knoepfe gross, nicht ueberdeckend (hoch/quer/360 px/iPad), Zoom bleibt waehrend der Fahrt', async () => {
+  for (const [w, h] of [[915, 412], [360, 740], [412, 915], [1024, 768], [1366, 1024]]) {
+    await viewport(w, h, 2); await sleep(300);
+    await click('.nav-btn[data-view=fahren]'); await sleep(300);
+    await click('#drv-start-b'); await waitFor('__taxi.drive.isActive()', 10000); await sleep(400);
+    const zr = await zrects(); assert.ok(zr.w >= 56, `${w}x${h}: Knoepfe zu klein ${zr.w}`);
+    assert.ok(zr.box.left >= 0 && zr.box.right <= zr.iw && zr.box.top >= 0 && zr.box.bottom <= zr.ih, `${w}x${h}: ausserhalb ${JSON.stringify(zr.box)}`);
+    assert.deepEqual(await clashWith(DRIVE_PARTS), [], `${w}x${h}: Zoom-Knoepfe ueberdecken Fahr-Anzeige`);
+    if (w === 915) {
+      await ev(`__taxi.zoomctl.reset()`);
+      await ev(`document.querySelector('#drv-speed').value = 6; document.querySelector('#drv-speed').dispatchEvent(new Event('input'))`);
+      await click('#zoom-ctl [data-z=out]'); await click('#zoom-ctl [data-z=out]'); await click('#drv-play'); await sleep(500);
+      const s0 = await ev(`return __taxi.drive.state().s`); await sleep(3000);
+      const r = await ev(`return { s: __taxi.drive.state().s, z: __taxi.map.getZoom(), d: __taxi.zoomctl.delta() }`);
+      assert.ok(r.s - s0 > 30, 'Auto faehrt'); assert.equal(r.d, -1); assert.equal(r.z, 14, `Tempo 6x = Standard 15, Zuschlag -1 -> 14, ist ${r.z}`);
+      await shot('/../v3/02-fahrmodus-zoom-quer', 600);
+      await ev(`__taxi.zoomctl.reset()`);
+    }
+    await click('#drv-end'); await waitFor('!__taxi.drive.isActive()', 10000);
+  }
+  await viewport(915, 412, 2);
+});
+
 for (const [name, w, h] of [['ipad-1024x768', 1024, 768], ['ipad-1366x1024', 1366, 1024], ['phone-quer-915x412', 915, 412], ['phone-hoch-412x915', 412, 915]]) {
   await step(`Layout ${name}: Knoepfe gross, im Bild, ohne Ueberdeckung; touch-action none`, async () => {
     await viewport(w, h, 2); await sleep(400);
@@ -97,6 +169,7 @@ for (const [name, w, h] of [['ipad-1024x768', 1024, 768], ['ipad-1366x1024', 136
       return { pairs, inside: names.every((n) => rects[n].left >= 0 && rects[n].right <= innerWidth && rects[n].top >= 0 && rects[n].bottom <= innerHeight), small: names.filter((n) => Math.min(rects[n].width, rects[n].height) < 44),
         hud: ['left', 'right', 'gas', 'brake'].filter((n) => ov(rects[n], speed) || ov(rects[n], street)), ta: cs.touchAction, us: cs.userSelect || cs.webkitUserSelect, sw: document.documentElement.scrollWidth, iw: innerWidth, app: R('#app').height, ih: innerHeight, v: __taxi.game.state().car.v };`);
     assert.deepEqual(r.pairs, [], 'ueberdecken: ' + r.pairs); assert.ok(r.inside, 'ausserhalb des Bildes'); assert.deepEqual(r.small, [], '< 44 px'); assert.deepEqual(r.hud, [], 'Anzeige verdeckt');
+    assert.deepEqual(await clashWith(GAME_PARTS), [], 'Zoom-Knoepfe ueberdecken'); assert.ok((await zrects()).w >= 56);
     assert.equal(r.ta, 'none'); assert.equal(r.us, 'none'); assert.ok(r.sw <= r.iw + 1 && Math.abs(r.app - r.ih) < 2); assert.ok(r.v > 3, 'faehrt nicht');
     await shot(`28-layout-2d-${name}`, 600);
     fps.push([`Spielmodus 2D ${w}x${h} DPR2 (Software-Rendering)`, await measureFps(), (await ev(`return __taxi.game.perf().avgMs`)).toFixed(2)]);

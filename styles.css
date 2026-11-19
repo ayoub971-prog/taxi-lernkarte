@@ -301,3 +301,17 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   .g-mission b { font-size: 20px; } .g-street b { font-size: 22px; }
 }
 #app[data-overview="1"] .leaflet-bottom { margin-bottom: 120px; }
+
+/* Karte zoomen waehrend der Fahrt (Fahr- und Spielmodus) */
+#zoom-ctl { display: none; position: absolute; left: calc(10px + env(safe-area-inset-left, 0px)); top: 38%; z-index: 720; flex-direction: column; gap: 8px; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#app[data-mode="drive"] #zoom-ctl, #app[data-mode="game"] #zoom-ctl { display: flex; }
+#app[data-overview="1"] #zoom-ctl { display: none !important; }
+#zoom-ctl button { width: 58px; height: 58px; border-radius: 16px; border: 3px solid #fff; background: #1d232aee; color: #fff; font-size: 36px; font-weight: 800; line-height: 1; padding: 0; touch-action: none; box-shadow: 0 4px 12px #0008; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#zoom-ctl button:active { filter: brightness(1.4); transform: scale(.95); }
+#zoom-ctl button:disabled { opacity: .45; }
+#zoom-ctl button[data-z=reset] { height: 46px; font-size: 20px; background: #37474fee; } #zoom-ctl button[data-z=reset][hidden] { display: none; }
+#zoom-ctl button small { font-size: 9px; font-weight: 700; }
+@media (orientation: landscape) and (max-height: 520px) { #zoom-ctl { top: 74px; gap: 6px; } }
+@media (min-width: 900px) and (min-height: 700px) { #zoom-ctl button { width: 64px; height: 64px; } }
+#app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { left: calc(84px + env(safe-area-inset-left, 0px)); }
+@media (min-width: 900px) and (min-height: 700px) { #app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { left: calc(92px + env(safe-area-inset-left, 0px)); } }

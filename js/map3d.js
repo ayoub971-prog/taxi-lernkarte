@@ -27,8 +27,8 @@ export function initMap3d(ctx) {
   function loadScript() {
     if (window.maplibregl) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=2'; document.head.append(link);
-      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=2';
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=3'; document.head.append(link);
+      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=3';
       s.onload = () => resolve(); s.onerror = () => reject(new Error('maplibre-script'));
       document.head.append(s);
     });

@@ -3,7 +3,7 @@
 // (rechts, links, oben, unten). Findet sich kein freier Platz, bleibt nur der Pin sichtbar,
 // bis man naeher heranzoomt. Wichtigere Orte (Amt, Bahnhof, Spital …) werden zuerst platziert.
 // Die Funktion arbeitet nur mit DOM-Rechtecken und gilt darum fuer Leaflet UND MapLibre.
-import { TYPEN } from './places.js?v=2';
+import { TYPEN } from './places.js?v=3';
 
 /** Je kleiner, desto frueher platziert (und desto eher sichtbar, wenn es eng wird). */
 export function labelPriority(p) {

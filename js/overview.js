@@ -2,7 +2,7 @@
 //   Uebersicht: pausiert die Fahrt, wechselt in die 2D-Karte (frei zoomen und verschieben), zeigt Auto und Ziel
 //               (und auf Wunsch den kuerzesten Weg). "Weiterfahren" bringt die Verfolger-Kamera genau dorthin zurueck, wo du warst.
 //   Minikarte:  kleine Nord-oben-Karte in der Ecke waehrend der Fahrt (Auto + Ziel), ein/aus.
-import { $, el, toast } from './ui.js?v=2';
+import { $, el, toast } from './ui.js?v=3';
 
 const CAR_SVG = '<svg viewBox="0 0 40 70" width="22" height="38"><rect x="4" y="3" width="32" height="64" rx="10" fill="#f9c80e" stroke="#6b5200" stroke-width="3"/><rect x="9" y="14" width="22" height="12" rx="3" fill="#2b3a4a"/><rect x="9" y="42" width="22" height="14" rx="3" fill="#2b3a4a"/></svg>';
 

@@ -18,7 +18,7 @@ Du bist Entwickler:in für eine kleine, **kostenlose** Web-App. Halte dich an di
 
 ## 1b. Stand: 3D ist vorläufig AUS
 
-Version 2 ist **ohne 3D** veröffentlicht, damit der Benutzer Namen, Spielmodus, Übersicht und Minikarte sofort ausprobieren kann. 3D ist hinter dem Schalter `ENABLE_3D` in `js/map3d.js` (Standard `false`; mit `?3d=1` in der Adresse einschaltbar). Der 3D-Code ist fertig gebaut, aber nicht ganz abgenommen: `node tests/browser-3d.mjs` lief zuletzt 18 von 19 grün, der letzte Fehler (Hochformat-Anzeige im 3D-Spiel) wurde per CSS behoben, der volle Lauf danach steht aus. Offen vor dem Einschalten: Test auf echtem Samsung/iPad (Bildrate), dann `ENABLE_3D = true`, Version erhöhen.
+Version 2 und 3 sind **ohne 3D** veröffentlicht, damit der Benutzer Namen, Spielmodus, Übersicht und Minikarte sofort ausprobieren kann. 3D ist hinter dem Schalter `ENABLE_3D` in `js/map3d.js` (Standard `false`; mit `?3d=1` in der Adresse einschaltbar). Der 3D-Code ist fertig gebaut, aber nicht ganz abgenommen: `node tests/browser-3d.mjs` lief zuletzt 18 von 19 grün, der letzte Fehler (Hochformat-Anzeige im 3D-Spiel) wurde per CSS behoben, der volle Lauf danach steht aus. Offen vor dem Einschalten: Test auf echtem Samsung/iPad (Bildrate), dann `ENABLE_3D = true`, Version erhöhen.
 
 ## 2. Ziel und Benutzer
 
@@ -32,7 +32,7 @@ Version 2 ist **ohne 3D** veröffentlicht, damit der Benutzer Namen, Spielmodus,
 
 * **Live:** <https://ayoub971-prog.github.io/taxi-lernkarte/>
 * **Repo (öffentlich):** <https://github.com/ayoub971-prog/taxi-lernkarte> (Branch `main`, GitHub Pages veröffentlicht den Ordner `/` automatisch nach jedem Push, dauert ca. 1 Minute).
-* **Aktuelle Version:** 2 (`VERSION` in `sw.js`, `APP_VERSION` in `js/app.js`, `?v=2` in HTML und Modulen).
+* **Aktuelle Version:** 3 (`VERSION` in `sw.js`, `APP_VERSION` in `js/app.js`, `?v=3` in HTML und Modulen).
 * Lizenz: MIT.
 
 ## 4. Architektur
@@ -52,6 +52,7 @@ Version 2 ist **ohne 3D** veröffentlicht, damit der Benutzer Namen, Spielmodus,
   * `js/gamemode.js`: Oberfläche, Spielschleife (`requestAnimationFrame`), Menüs (Intro, Pause, Ergebnis), Anzeige (Strasse, Ort, km/h, Tempolimit-Schild nur bei OSM-`maxspeed`, Kreuzungsvorschau, Kompassfeil), Hinweis (kürzester Weg 12 s, −150 Punkte), Wenden (nur unter 20 km/h, nicht auf Einbahnstrassen), Ergebnis geht in den Lernstand (`progress.answer`).
   * `js/controls.js`: Eingabe. Pointer-Events mit `setPointerCapture` je Finger (Multitouch), Tastatur, Gamepad-API, Vibration und Ton nur wenn vorhanden.
   * Punkte: `1000 − Überzeit·4 − Fehler·120 − Hinweise·150 − Rasen·8` (mind. 100). 3 Sterne: Zeit ≤ 1,7·Richtzeit + 15 s, 0 Fehler, 0 Hinweise. 2 Sterne: ≤ 2,6·Richtzeit + 30 s und ≤ 2 Fehler. Ankunft: 70 m Luftlinie zum Ort. «Tempo ×» (1–4, Standard 2) macht die Spielzeit schneller, nicht die angezeigten km/h.
+* **Zoom während der Fahrt** (`js/zoomctl.js`, ab Version 3): Plus/Minus-Knöpfe `#zoom-ctl` (links), Pinch (Touch-Ereignisse in der Capture-Phase auf `#stage`, damit Leaflet nicht mitzoomt), Mausrad, Tasten +/-/0. Gewählter Zuschlag `delta` (−5…+2, Schritte 0,25) wird zum Standardzoom von `drivemode.js`/`gamemode.js` addiert (`ctx.zoomctl.zoom(base)`, Grenzen 12–18) und in `settings.driveZoom` gespeichert. Nur 2D (3D-Kamera unverändert).
 * **Übersicht** (`js/overview.js`): Knopf «Karte» pausiert, wechselt in 2D (ohne die Einstellung zu ändern), zeigt Auto und Ziel (+ Hinweisweg), frei zoomen/schieben. «Weiterfahren» bringt die Kamera zurück. **Minikarte** (eigene kleine Leaflet-Karte) ist optional.
 * **Grosse Namen** (`js/labels.js`): `layoutLabels(container)` probiert je Pin vier Plätze (rechts, links, oben, unten), nach Wichtigkeit (Amt, Bahnhof, Spital, Platz, Hafen, Einkauf, Ort), alle Pins sind Hindernisse, ohne freien Platz bekommt der Name die Klasse `.hide`. Gleicher Code für Leaflet und MapLibre.
 * **Service Worker** (`sw.js`): App-Hülle vorab im Cache (Liste `ASSETS`), OSM-Kacheln max. 400 (7 Tage), OpenFreeMap-Dateien max. 600 (7 Tage, Cache `taxi-lernkarte-vtiles`), Stil/Schriften «Netz zuerst».
@@ -72,6 +73,7 @@ Version 2 ist **ohne 3D** veröffentlicht, damit der Benutzer Namen, Spielmodus,
 | `js/labels.js` | Namen ohne Überlappung |
 | `js/game.js`, `js/gamemode.js`, `js/controls.js` | Spielmodus (siehe oben) |
 | `js/overview.js` | Übersichtskarte und Minikarte |
+| `js/zoomctl.js` | Zoom während der Fahrt (Knöpfe, Pinch, Mausrad, Tasten) |
 | `js/store.js`, `js/ui.js` | localStorage (Schlüssel `taxi-lernkarte-v1`), kleine DOM-Helfer, Sprachausgabe |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline und Installation |
 | `data/routes-ab.json`, `data/pairs.json`, `data/graph.json` | Routen A/B, Aufgabenpaare (Stufe 4), Strassennetz |
@@ -98,7 +100,7 @@ Die App selber ruft im Betrieb **nur** `tile.openstreetmap.org` und `tiles.openf
 ```bash
 npm test                              # Node-Tests (30): Orte, Quiz, Lernstand, Routen, Service Worker, Spiel-Kern (Graph, Dijkstra, Physik, Autopilot, Missionen)
 node tests/browser-smoke.mjs          # echter Chrome headless, 2D, Handyformat, Screenshots nach /workspace/taxi-shots
-node tests/browser-2d.mjs             # Auslieferung ohne 3D: Namen, Spielmodus 2D (Touch, Mehrfinger), Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate
+node tests/browser-2d.mjs             # Auslieferung ohne 3D: Namen, Spielmodus 2D (Touch, Mehrfinger), Zoom während der Fahrt, Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate (12 Schritte)
 node tests/browser-3d.mjs             # (öffnet die App mit ?3d=1) 3D, Namen, Fahrmodus 3D, Spielmodus mit echten Touch-Ereignissen, Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate; Screenshots nach /workspace/taxi-shots/v2 (SHOTS_DIR änderbar)
 python3 tests/webkit-smoke.py         # WebKit (Playwright): Fehler, Layout, Touch-Eigenschaften, Spielstart
 ```
@@ -112,9 +114,9 @@ python3 tests/webkit-smoke.py         # WebKit (Playwright): Fehler, Layout, Tou
 ## 7. Neue Version veröffentlichen
 
 1. Änderungen machen, `npm test` und die Browser-Tests laufen lassen.
-2. `node tools/bump-version.mjs 3` (Zahl = neue Version). Das setzt `VERSION` in `sw.js`, `APP_VERSION` in `js/app.js` und alle `?v=` in `index.html`, `manifest.webmanifest` und den Modulen.
+2. `node tools/bump-version.mjs 4` (Zahl = neue Version). Das setzt `VERSION` in `sw.js`, `APP_VERSION` in `js/app.js` und alle `?v=` in `index.html`, `manifest.webmanifest` und den Modulen.
 3. `git add -A && git commit -m "..." && git push` (Branch `main`). GitHub Pages baut automatisch.
-4. Prüfen: <https://ayoub971-prog.github.io/taxi-lernkarte/sw.js> zeigt die neue `VERSION`; Dateien wie `js/app.js?v=3` geben 200.
+4. Prüfen: <https://ayoub971-prog.github.io/taxi-lernkarte/sw.js> zeigt die neue `VERSION`; Dateien wie `js/app.js?v=4` geben 200.
 5. Auf Handy/iPad die App einmal ganz schliessen und neu öffnen (Service Worker wechselt beim zweiten Start). Bei Manifest-Änderungen (z. B. Ausrichtung) die installierte App neu installieren.
 6. Strassennetz neu bauen (selten): `bash tools/fetch-graph-raw.sh /pfad/osm-raw` (6 Abfragen, ca. 3 Minuten, Pausen nicht kürzen), dann `node tools/build-graph.mjs /pfad/osm-raw` → `data/graph.json`, dann `npm test`.
 

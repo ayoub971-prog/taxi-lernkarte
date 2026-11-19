@@ -2,12 +2,12 @@
 // Gas / Bremse / Links / Rechts als Bildschirm-Knoepfe (Multitouch), per Gamepad oder Tastatur.
 // Mission: "Fahre zum Paradeplatz" – Pfeil und Distanz zeigen die Richtung, am Ende gibt es Punkte und Sterne.
 // Rechenkern: game.js (Node-getestet). Eingabe: controls.js. Kamera: 3D hinter dem Auto (MapLibre) oder 2D gedreht (Leaflet).
-import * as G from './game.js?v=2';
-import { createControls } from './controls.js?v=2';
-import { angleDiff } from './drive.js?v=2';
-import { formatDistance, distanceM } from './geo.js?v=2';
-import { STUFEN } from './places.js?v=2';
-import { $, el, toast } from './ui.js?v=2';
+import * as G from './game.js?v=3';
+import { createControls } from './controls.js?v=3';
+import { angleDiff } from './drive.js?v=3';
+import { formatDistance, distanceM } from './geo.js?v=3';
+import { STUFEN } from './places.js?v=3';
+import { $, el, toast } from './ui.js?v=3';
 
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const ARROW = { links: '◀', geradeaus: '▲', rechts: '▶' };
@@ -46,7 +46,7 @@ export function initGame(ctx) {
 
   // ------------------------------------------------------------ Strassennetz laden
   function loadGraph() {
-    return (graphP ??= fetch('data/graph.json?v=2').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(G.buildGraph)
+    return (graphP ??= fetch('data/graph.json?v=3').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(G.buildGraph)
       .catch((e) => { graphP = null; throw e; }));
   }
 
@@ -110,11 +110,12 @@ export function initGame(ctx) {
     const eff = Math.abs(car.v) * g.scale;
     if (gl.active) gl.follow(pos.lat, pos.lng, g.heading, eff < 4 ? 17.6 : eff < 12 ? 17.1 : eff < 25 ? 16.6 : 16.1, geo.W, geo.H, geo.cx, geo.cy, 62);
     else {
-      map.setView([pos.lat, pos.lng], eff < 4 ? 18 : eff < 12 ? 17 : eff < 25 ? 16.5 : 16, { animate: false });
+      map.setView([pos.lat, pos.lng], ctx.zoomctl.zoom(eff < 4 ? 18 : eff < 12 ? 17 : eff < 25 ? 16.5 : 16), { animate: false });
       mapEl.style.transform = `rotate(${-g.heading}deg)`;
     }
   }
   ctx.viewListeners.push(() => { if (g && !ctx.forceOverview) { layoutGame(); frame(true); } });
+  setTimeout(() => ctx.zoomctl.onChange(() => { if (g && !ctx.forceOverview) frame(false, 0); }), 0);
   addEventListener('resize', () => { if (g && !ctx.forceOverview) { layoutGame(); frame(true); } });
 
   // ------------------------------------------------------------ Hauptschleife
