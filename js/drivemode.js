@@ -2,13 +2,13 @@
 // ist stark herangezoomt und dreht sich in Fahrtrichtung (CSS-Drehung des Karten-Containers).
 // Oben ein Navi-Balken (Strasse, naechster Abbieger, Distanz), unten Steuerung, dazwischen
 // Pruefungsfragen ("Wohin geht es?", "Welcher Ort kommt als Naechstes?"). Alles ist Simulation.
-import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=1';
-import { recordWrong, recordRight, allKeys } from './repeat.js?v=1';
-import { formatDistance } from './geo.js?v=1';
-import { $, el, toast, speak } from './ui.js?v=1';
+import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=2';
+import { recordWrong, recordRight, allKeys } from './repeat.js?v=2';
+import { formatDistance } from './geo.js?v=2';
+import { $, el, toast, speak } from './ui.js?v=2';
 
 export function initDrive(ctx) {
-  const { L, map, store } = ctx;
+  const { L, map, store, gl } = ctx;
   const mapEl = $('#map'), stage = $('#stage'), car = $('#car');
   const hud = $('#drive-hud'), bottom = $('#drive-bottom'), qBox = $('#drive-q');
   const layer = L.layerGroup().addTo(map);
@@ -16,12 +16,22 @@ export function initDrive(ctx) {
   let raf = 0;
 
   const zoomFor = (mul) => (mul <= 2 ? 17 : mul <= 5 ? 16 : 15);
+  const zoomFor3d = (mul) => (mul <= 2 ? 17.3 : mul <= 5 ? 16.5 : 15.7);   // MapLibre-Zoom (512er Kacheln)
   const landscape = () => stage.clientWidth > stage.clientHeight * 1.2;
+  let geo = { W: 0, H: 0, cx: 0, cy: 0 };
 
   /** Karten-Container uebergross machen, damit beim Drehen keine Ecken leer bleiben; Auto sitzt im Zentrum der Drehung. */
   function layoutDrive() {
     const W = stage.clientWidth, H = stage.clientHeight;
     const D = Math.ceil(Math.hypot(W, H)) + 40;
+    if (gl.active) {   // 3D: Kamera hinter dem Auto, das Auto sitzt tief im Bild
+      const cx3 = landscape() ? W * 0.27 : W / 2, cy3 = H * (landscape() ? 0.72 : 0.74);
+      geo = { W, H, cx: cx3, cy: cy3 };
+      mapEl.style.cssText = '';
+      Object.assign(car.style, { left: cx3 + 'px', top: cy3 + 'px' });
+      gl.map()?.resize();
+      return;
+    }
     const cx = landscape() ? W * 0.27 : W / 2, cy = H * (landscape() ? 0.6 : 0.64);
     Object.assign(mapEl.style, { inset: 'auto', width: D + 'px', height: D + 'px', left: cx - D / 2 + 'px', top: cy - D / 2 + 'px' });
     Object.assign(car.style, { left: cx + 'px', top: cy + 'px' });
@@ -46,8 +56,11 @@ export function initDrive(ctx) {
     L.polyline(pts, { color: '#fff', weight: 14, opacity: 0.9, interactive: false }).addTo(layer);
     L.polyline(pts, { color: '#1976d2', weight: 8, opacity: 0.9, interactive: false }).addTo(layer);
     const end = route.pts.at(-1);
+    gl.setLine('drive', pts, { color: '#1976d2', width: 8 }); gl.setEnd(end.lat, end.lng);
     L.marker([end.lat, end.lng], { icon: L.divIcon({ html: '<div style="font-size:30px;line-height:30px">🏁</div>', className: '', iconSize: [30, 30], iconAnchor: [5, 28] }), interactive: false }).addTo(layer);
-    [hud, bottom, car].forEach((n) => { n.hidden = false; });
+    [hud, bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = false; });
+    $('#drv-3d').hidden = !ctx.gl.supported();
+    ctx.overview.show(ctx.overview.enabled(), openOverview); syncMiniBtn();
     qBox.hidden = true;
     layoutDrive();
     syncVoiceBtn(); $('#drv-play').textContent = '▶';
@@ -59,12 +72,14 @@ export function initDrive(ctx) {
   function stop(silent = false) {
     if (!d) return;
     cancelAnimationFrame(raf); d = null;
-    layer.clearLayers();
-    [hud, bottom, car].forEach((n) => { n.hidden = true; });
+    layer.clearLayers(); gl.setLine('drive', null); gl.setEnd(null);
+    ctx.overview.close(); ctx.overview.show(false);
+    [hud, bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = true; });
     mapEl.style.cssText = ''; car.style.cssText = '';
     try { window.speechSynthesis?.cancel(); } catch { /* optional */ }
     ctx.setMode('normal'); ctx.setMarkersVisible(true); ctx.refresh();
     map.invalidateSize({ animate: false });
+    if (gl.active) { gl.resetPadding(); if (!silent) gl.fitPoints([[47.17, 8.47], [47.40, 8.72]], 10); }
     if (!silent) map.fitBounds([[47.17, 8.47], [47.40, 8.72]], { animate: false });
   }
 
@@ -78,7 +93,7 @@ export function initDrive(ctx) {
       if (q) ask(q);
       if (d.s >= d.route.total) finishDrive();
     }
-    frame(false, dt, now);
+    if (!ctx.forceOverview) { frame(false, dt, now); ctx.overview.update(posAt(d.route, d.s), d.heading, d.route.pts.at(-1), now); }
     raf = requestAnimationFrame(loop);
   }
 
@@ -86,9 +101,11 @@ export function initDrive(ctx) {
   function frame(first, dt = 0, now = 0) {
     const r = d.route, pos = posAt(r, d.s), target = headingAt(r, d.s);
     d.heading = first ? target : (d.heading + angleDiff(d.heading, target) * Math.min(1, dt * 4) + 360) % 360;
-    const z = zoomFor(d.mul);
-    map.setView([pos.lat, pos.lng], z, { animate: false });
-    mapEl.style.transform = `rotate(${-d.heading}deg)`;
+    if (gl.active) gl.follow(pos.lat, pos.lng, d.heading, zoomFor3d(d.mul), geo.W, geo.H, geo.cx, geo.cy);
+    else {
+      map.setView([pos.lat, pos.lng], zoomFor(d.mul), { animate: false });
+      mapEl.style.transform = `rotate(${-d.heading}deg)`;
+    }
     if (first || now - d.hudAt > 200) { d.hudAt = now; updateHud(); }
   }
 
@@ -162,7 +179,22 @@ export function initDrive(ctx) {
   $('#drv-speed').addEventListener('input', (e) => { $('#drv-speed-label').textContent = `${e.target.value}×`; if (d) d.mul = Number(e.target.value); });
   $('#drv-voice').addEventListener('click', () => { store.setSetting('voice', !store.state.settings.voice); syncVoiceBtn(); if (!store.state.settings.voice) { try { speechSynthesis.cancel(); } catch { /* */ } } });
   $('#drv-end').addEventListener('click', () => stop());
-  addEventListener('resize', () => { if (d) layoutDrive(); });
+  addEventListener('resize', () => { if (d && !ctx.forceOverview) layoutDrive(); });
+  // 2D <-> 3D waehrend der Fahrt: Layout und Kamera neu setzen
+  ctx.viewListeners.push(() => { if (d && !ctx.forceOverview) { layoutDrive(); frame(true); } });
+  // Uebersichtskarte (pausiert die Fahrt) und Minikarte
+  function openOverview() {
+    if (!d || d.pending || d.finished) return toast(d?.pending ? 'Erst die Frage beantworten.' : 'Die Fahrt ist zu Ende.');
+    let was = false;
+    ctx.overview.open({
+      pos: () => ({ ...posAt(d.route, d.s), heading: d.heading }), target: d.route.pts.at(-1),
+      pause: () => { was = d.playing; d.playing = false; syncPlayBtn(); },
+      resume: () => { if (!d) return; d.playing = was; d.last = 0; syncPlayBtn(); layoutDrive(); frame(true); },
+    });
+  }
+  const syncMiniBtn = () => $('#drv-mm').setAttribute('aria-pressed', String(ctx.overview.enabled()));
+  $('#drv-map').addEventListener('click', openOverview);
+  $('#drv-mm').addEventListener('click', () => { ctx.overview.setEnabled(!ctx.overview.enabled()); ctx.overview.show(ctx.overview.enabled(), openOverview); syncMiniBtn(); });
 
   // ------------------------------------------------------------ Start-Knoepfe im Fahren-Menue
   async function startAB(key) {
@@ -180,5 +212,5 @@ export function initDrive(ctx) {
     toast(`Fahre von ${pick.a.label} nach ${pick.b.label}`, 4000);
   });
 
-  return { start, stop, isActive: () => !!d, state: () => d };
+  return { openOverview, start, stop, isActive: () => !!d, state: () => d };
 }

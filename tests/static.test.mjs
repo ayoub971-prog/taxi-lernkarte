@@ -40,7 +40,7 @@ test('Leaflet liegt lokal, keine CDN-/Fremd-Skripte, nur erlaubte Server im Code
   assert.ok(fs.existsSync(path.join(ROOT, 'vendor/leaflet/LICENSE')));
   const hosts = new Set();
   for (const f of ['index.html', 'sw.js', ...jsFiles]) for (const m of read(f).matchAll(/https?:\/\/([a-z0-9.-]+)/gi)) hosts.add(m[1]);
-  const allowed = new Set(['tile.openstreetmap.org', 'www.openstreetmap.org', 'leafletjs.com', 'github.com']);
+  const allowed = new Set(['tile.openstreetmap.org', 'www.openstreetmap.org', 'leafletjs.com', 'github.com', 'tiles.openfreemap.org', 'openfreemap.org', 'www.openmaptiles.org', 'overpass.openstreetmap.fr']);
   for (const h of hosts) assert.ok(allowed.has(h), 'unerwarteter Server: ' + h);
   assert.match(read('js/app.js'), /OpenStreetMap<\/a>-Mitwirkende/); // Quellenangabe auf der Karte
 });

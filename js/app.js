@@ -1,14 +1,18 @@
 // Taxi-Lernkarte – Hauptprogramm: Karte, Pins, Orte-Liste, eigene Orte, Sicherung, Navigation.
 // Quiz/Pruefung steckt in quizmode.js, der Fahrmodus in drivemode.js. Beide bekommen das Objekt `ctx`.
-import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=1';
-import { distanceM, formatDistance } from './geo.js?v=1';
-import { createStore, makeBackup, parseBackup } from './store.js?v=1';
-import * as progress from './progress.js?v=1';
-import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=1';
-import { initQuiz } from './quizmode.js?v=1';
-import { initDrive } from './drivemode.js?v=1';
+import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=2';
+import { distanceM, formatDistance } from './geo.js?v=2';
+import { createStore, makeBackup, parseBackup } from './store.js?v=2';
+import * as progress from './progress.js?v=2';
+import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=2';
+import { initQuiz } from './quizmode.js?v=2';
+import { initDrive } from './drivemode.js?v=2';
+import { initGame } from './gamemode.js?v=2';
+import { initOverview } from './overview.js?v=2';
+import { initMap3d } from './map3d.js?v=2';
+import { layoutLabels, labelPriority } from './labels.js?v=2';
 
-export const APP_VERSION = '1';
+export const APP_VERSION = '2';
 const L = window.L;
 
 // ---------------------------------------------------------------- Speicher
@@ -43,12 +47,12 @@ const ctx = {
     if (sel === '1' || sel === '2' || sel === '3') return all.filter((p) => p.stufe === Number(sel));
     return all;
   },
-  setMode(m) { ctx.mode = m; $('#app').dataset.mode = m; },
+  setMode(m) { ctx.mode = m; $('#app').dataset.mode = m; applyView(); },
   showView: (v) => showView(v),
   refresh: () => { renderMarkers(); renderList(); renderBars(); },
   pinIcon: (p, o) => pinIcon(p, o),
   onMapClick: null,
-  setMarkersVisible(on) { if (on) { map.addLayer(markerLayer); renderMarkers(); } else map.removeLayer(markerLayer); },
+  setMarkersVisible(on) { if (on) { map.addLayer(markerLayer); renderMarkers(); } else { map.removeLayer(markerLayer); gl.clearPlaces(); } },
   setFilter(stufe, weak = false) { ctx.filter = { stufe, weak }; syncChips(); ctx.refresh(); },
   resize: () => map.invalidateSize({ animate: false }),
   routesAB: loadRoutesAB,
@@ -56,12 +60,61 @@ const ctx = {
   flyToPlace,
 };
 window.__taxi = ctx;
+const gl = initMap3d(ctx);   // 3D-Ansicht (MapLibre), wird erst bei Bedarf geladen
+ctx.gl = gl; ctx.viewListeners = [];
+
+// ---------------------------------------------------------------- 2D / 3D umschalten
+/** 3D gewuenscht? Standard: ja, wenn WebGL vorhanden ist. Gemerkt wird nur die Wahl der Person. */
+const want3d = () => store.state.settings.view3d !== false && gl.supported() && !ctx.forceOverview;
+let applying = Promise.resolve();
+/** Zeigt je nach Modus die 3D- oder die 2D-Karte. Quiz und Pruefung laufen immer in 2D (genaues Tippen). */
+function applyView() {
+  return (applying = applying.then(doApplyView));
+}
+async function doApplyView() {
+  const app = $('#app');
+  const wantGl = want3d() && (ctx.mode === 'normal' || ctx.mode === 'drive' || ctx.mode === 'game');
+  if (wantGl && !gl.active) {
+    try { try { await gl.ensure(); } catch (e0) { if (!gl.supported()) throw e0; await new Promise((r) => setTimeout(r, 1500)); await gl.ensure(); } }   // 1 Wiederholung: beim allerersten Start uebernimmt gerade der Service Worker
+    catch (e) {
+      console.warn('3D nicht verfuegbar:', e?.message || e);
+      if (!gl.failedToasted) { gl.failedToasted = true; toast(gl.supported() ? '3D braucht Internet – die 2D-Karte bleibt aktiv.' : 'Dein Gerät kann kein 3D (WebGL) – die 2D-Karte bleibt aktiv.', 4500); }
+      syncViewBtn(); return;
+    }
+    if (!(want3d() && (ctx.mode === 'normal' || ctx.mode === 'drive' || ctx.mode === 'game'))) return doApplyView();   // Modus hat sich waehrend des Ladens geaendert
+    gl.syncFrom2D(); gl.active = true; app.dataset.gl = '3d';
+    gl.map().resize(); renderMarkers(); reapplyLocation();
+  } else if (!wantGl && gl.active) {
+    gl.active = false; app.dataset.gl = '2d';
+    gl.syncTo2D(); map.invalidateSize({ animate: false });
+    if (gl.loaded()) gl.clearPlaces();
+    renderMarkers();
+  } else if (!wantGl) app.dataset.gl = '2d';
+  syncViewBtn(); layoutActive(); ctx.viewListeners.forEach((f) => f());
+}
+function syncViewBtn() {
+  const on = gl.active;
+  for (const b of $$('#btn-3d, #drv-3d')) { b.setAttribute('aria-pressed', String(on)); b.querySelector('span') ? (b.querySelector('span').textContent = on ? '2D' : '3D') : (b.textContent = on ? '2D' : '3D'); }
+  $('#btn-3d').hidden = !gl.supported();
+}
+ctx.applyView = applyView;
+ctx.glLost = () => { toast('3D wurde vom Gerät beendet – die 2D-Karte übernimmt.', 4500); applyView(); };
+// iOS: Seitenzoom per Zwei-Finger-Geste und Doppeltipp-Zoom verhindern (die Karten haben ihr eigenes Zoomen)
+['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+function toggle3d() { store.setSetting('view3d', !gl.active); gl.failedToasted = false; return applyView(); }
+$('#btn-3d').addEventListener('click', toggle3d);
+$('#drv-3d').addEventListener('click', toggle3d);
 
 // ---------------------------------------------------------------- Pins
-function pinIcon(p, { label = true, cls = '' } = {}) {
+function pinNode(p, { label = true, cls = '' } = {}) {
   const m = p.own ? 'own' : 'm-' + progress.mastery(store.state.progress, p.id);
-  const node = el('div', { class: `pin ${m} ${label ? '' : 'nolabel'} ${cls}` }, el('span', { class: 'pin-dot' }), el('span', { class: 'pin-label' }, p.label || p.name));
-  return L.divIcon({ html: node, className: '', iconSize: [44, 48], iconAnchor: [22, 46], popupAnchor: [0, -44] });
+  const node = el('div', { class: `pin ${m} ${label ? '' : 'nolabel'} ${cls}`, 'data-prio': String(labelPriority(p)) },
+    el('span', { class: 'pin-dot' }), el('span', { class: 'pin-ico', 'aria-hidden': 'true' }, p.own ? '⭐' : (TYP_ICON[p.type] || '📍')),
+    el('span', { class: 'pin-label' }, p.label || p.name));
+  return node;
+}
+function pinIcon(p, o = {}) {
+  return L.divIcon({ html: pinNode(p, o), className: '', iconSize: [44, 48], iconAnchor: [22, 46], popupAnchor: [0, -44] });
 }
 
 const markerLayer = L.layerGroup().addTo(map);
@@ -83,38 +136,37 @@ function popupNode(p) {
     el('small', {}, p.own ? 'Eigener Ort' : `Lernstand: ${mtxt}`));
   if (p.own) {
     n.append(el('br'),
-      el('button', { class: 'pbtn', type: 'button', onclick: () => { map.closePopup(); openPlaceDialog({ place: p }); } }, '✏️ Bearbeiten'),
+      el('button', { class: 'pbtn', type: 'button', onclick: () => { closePopups(); openPlaceDialog({ place: p }); } }, '✏️ Bearbeiten'),
       el('button', { class: 'pbtn danger', type: 'button', onclick: () => deletePlace(p) }, '🗑️ Löschen'));
   }
   return n;
 }
 
 function renderMarkers() {
-  markerLayer.clearLayers(); markers.clear();
+  markerLayer.clearLayers(); markers.clear(); gl.clearPlaces();
   if (ctx.mode !== 'normal') return;
   for (const p of visiblePlaces()) {
     const mk = L.marker([p.lat, p.lng], { icon: pinIcon(p), title: p.name, keyboard: true, riseOnHover: true });
     mk.bindPopup(() => popupNode(p), { maxWidth: 280 });
     markerLayer.addLayer(mk); markers.set(p.id, mk);
   }
-  requestAnimationFrame(layoutLabels);
+  if (gl.active || gl.loaded()) gl.setPlaces(visiblePlaces(), (p) => pinNode(p), popupNode);
+  requestAnimationFrame(layoutActive);
 }
+function closePopups() { map.closePopup(); gl.closePopups(); }
 
-/** Beschriftungen, die sich ueberlappen, werden ausgeblendet (zuerst kommende gewinnen). */
-function layoutLabels() {
-  const labels = $$('.pin-label', map.getContainer());
-  labels.forEach((l) => l.classList.remove('hide'));
-  if ($('#map').classList.contains('labels-off')) return;
-  const kept = [];
-  for (const l of labels) {
-    const r = l.getBoundingClientRect();
-    if (kept.some((k) => r.left < k.right && r.right > k.left && r.top < k.bottom && r.bottom > k.top)) l.classList.add('hide'); else kept.push(r);
-  }
-}
-map.on('zoomend moveend', () => { if (ctx.mode === 'normal') layoutLabels(); });
+/** Beschriftungen der gerade sichtbaren Karte neu platzieren (siehe labels.js). */
+function layoutActive() { if (ctx.mode === 'normal') layoutLabels(gl.active ? gl.container : $('#map')); }
+map.on('zoomend moveend', layoutActive);
+gl.onMove(layoutActive);
 
 function flyToPlace(p) {
   showView('karte');
+  if (gl.active) {
+    gl.flyTo(p.lat, p.lng, 16.5);
+    gl.map().once('moveend', () => gl.openPopup(p.id));
+    return;
+  }
   const mk = markers.get(p.id);
   map.flyTo([p.lat, p.lng], 16, { duration: 1 });
   if (mk) map.once('moveend', () => mk.openPopup());
@@ -123,15 +175,15 @@ function flyToPlace(p) {
 // ---------------------------------------------------------------- Namen ein/aus
 function applyLabels() {
   const on = store.state.settings.labels !== false;
-  $('#map').classList.toggle('labels-off', !on);
+  $('#map').classList.toggle('labels-off', !on); gl.container.classList.toggle('labels-off', !on);
   $('#btn-labels').setAttribute('aria-pressed', String(on));
-  layoutLabels();
+  layoutActive();
 }
 $('#btn-labels').addEventListener('click', () => { store.setSetting('labels', !(store.state.settings.labels !== false)); applyLabels(); });
 
 // ---------------------------------------------------------------- Routen A / B (Lernskizze)
 let routesPromise = null;
-function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=1').then((r) => r.json()); }
+function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=2').then((r) => r.json()); }
 const routeLayers = {};
 const ROUTE_STYLE = {
   A: { color: '#1565c0', weight: 5, title: 'Variante A – Autobahn A3' },
@@ -139,7 +191,7 @@ const ROUTE_STYLE = {
 };
 async function toggleRoute(key) {
   const btn = $(key === 'A' ? '#btn-route-a' : '#btn-route-b');
-  if (routeLayers[key]) { map.removeLayer(routeLayers[key]); delete routeLayers[key]; }
+  if (routeLayers[key]) { map.removeLayer(routeLayers[key]); delete routeLayers[key]; gl.setLine('route-' + key, null); }
   else {
     try {
       const data = await loadRoutesAB();
@@ -151,7 +203,8 @@ async function toggleRoute(key) {
       const grp = L.featureGroup(key === 'B' ? [casing, line] : [casing, line]).addTo(map);
       line.bindPopup(`<b>${st.title}</b><br>${(data.routes[key].d / 1000).toFixed(1)} km · Lernskizze, keine Prüfungsroute`);
       routeLayers[key] = grp;
-      map.fitBounds(grp.getBounds(), { padding: [30, 30] });
+      gl.setLine('route-' + key, pts, { color: st.color, width: 5 });
+      if (gl.active) gl.fitPoints(pts, 40); else map.fitBounds(grp.getBounds(), { padding: [30, 30] });
     } catch { toast('Route konnte nicht geladen werden.'); }
   }
   btn.setAttribute('aria-pressed', String(!!routeLayers[key]));
@@ -161,7 +214,8 @@ $('#btn-route-a').addEventListener('click', () => toggleRoute('A'));
 $('#btn-route-b').addEventListener('click', () => toggleRoute('B'));
 
 // ---------------------------------------------------------------- Mein Standort + "In der Naehe"
-let locLayer = null;
+let locLayer = null, lastLoc = null;
+function reapplyLocation() { if (lastLoc) gl.setLocation(lastLoc.lat, lastLoc.lng); }
 $('#btn-locate').addEventListener('click', () => {
   if (!navigator.geolocation) return toast('Dein Gerät kann den Standort nicht bestimmen.');
   toast('Standort wird gesucht …');
@@ -170,7 +224,8 @@ $('#btn-locate').addEventListener('click', () => {
     locLayer?.remove();
     locLayer = L.layerGroup([L.circle(ll, { radius: pos.coords.accuracy, color: '#1565c0', weight: 1, fillOpacity: 0.08 }),
       L.circleMarker(ll, { radius: 9, color: '#fff', weight: 3, fillColor: '#1565c0', fillOpacity: 1 })]).addTo(map);
-    map.flyTo(ll, 15, { duration: 1 });
+    lastLoc = { lat: ll.lat, lng: ll.lng };
+    if (gl.active) { gl.setLocation(ll.lat, ll.lng); gl.flyTo(ll.lat, ll.lng, 15.5); } else map.flyTo(ll, 15, { duration: 1 });
     showNearby(ll);
   }, (err) => toast(err.code === 1 ? 'Standort nicht erlaubt. Bitte in den Chrome-Einstellungen freigeben.' : 'Standort nicht gefunden.'),
   { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 });
@@ -205,29 +260,36 @@ $('#form-place').addEventListener('submit', (e) => {
 });
 $('#place-cancel').addEventListener('click', () => dlgPlace.close());
 async function deletePlace(p) {
-  map.closePopup();
+  closePopups();
   if (await confirmDialog(`«${p.name}» löschen?`, 'Löschen')) { store.removePlace(p.id); store.mutateProgress((pr) => { delete pr[p.id]; }); ctx.refresh(); toast('Gelöscht.'); }
 }
 
 // Langer Druck (ca. 0.6 s) auf die Karte -> neuer Ort. Eigene Erkennung, weil das native
 // "contextmenu" bei Finger und S Pen nicht ueberall gleich ausgeloest wird.
 let press = null, suppressUntil = 0;
-const cont = map.getContainer();
 const cancelPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
-cont.addEventListener('pointerdown', (e) => {
-  cancelPress();
-  if (!e.isPrimary || ctx.mode !== 'normal' || e.target.closest('.leaflet-control, .leaflet-marker-icon, .leaflet-popup')) return;
-  const ev = { clientX: e.clientX, clientY: e.clientY };
-  press = { x: e.clientX, y: e.clientY, timer: setTimeout(() => {
-    press = null; suppressUntil = Date.now() + 900;
-    openPlaceDialog({ latlng: map.mouseEventToLatLng(ev) });
-  }, 600) };
+/** Langdruck-Erkennung fuer einen Karten-Container; toLatLng wandelt Bildschirmpunkt -> {lat,lng}. */
+function watchLongPress(cont, ignore, toLatLng) {
+  cont.addEventListener('pointerdown', (e) => {
+    cancelPress();
+    if (!e.isPrimary || ctx.mode !== 'normal' || e.target.closest(ignore)) return;
+    const ev = { clientX: e.clientX, clientY: e.clientY };
+    press = { x: e.clientX, y: e.clientY, timer: setTimeout(() => {
+      press = null; suppressUntil = Date.now() + 900;
+      openPlaceDialog({ latlng: toLatLng(ev) });
+    }, 600) };
+  });
+  cont.addEventListener('pointermove', (e) => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => cont.addEventListener(t, cancelPress));
+  cont.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+watchLongPress(map.getContainer(), '.leaflet-control, .leaflet-marker-icon, .leaflet-popup', (ev) => map.mouseEventToLatLng(ev));
+watchLongPress(gl.container, '.maplibregl-ctrl, .maplibregl-marker, .maplibregl-popup', (ev) => {
+  const r = gl.container.getBoundingClientRect(), ll = gl.map().unproject([ev.clientX - r.left, ev.clientY - r.top]);
+  return { lat: ll.lat, lng: ll.lng };
 });
-cont.addEventListener('pointermove', (e) => { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress(); });
-['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => cont.addEventListener(t, cancelPress));
 map.on('zoomstart movestart', cancelPress);
-cont.addEventListener('contextmenu', (e) => e.preventDefault());
-map.on('contextmenu', (e) => { if (ctx.mode === 'normal' && Date.now() > suppressUntil) openPlaceDialog({ latlng: e.latlng }); });
+map.on('contextmenu', (e) => { if (ctx.mode === 'normal' && !gl.active && Date.now() > suppressUntil) openPlaceDialog({ latlng: e.latlng }); });
 map.on('click', (e) => { if (Date.now() > suppressUntil && ctx.onMapClick) ctx.onMapClick(e); });
 
 // ---------------------------------------------------------------- Orte-Liste, Filter, Fortschritt
@@ -282,7 +344,7 @@ function showView(v) {
   for (const [k, sel] of Object.entries(PANELS)) $(sel).hidden = k !== v;
   if (v === 'orte') { renderList(); renderBars(); }
   if (v === 'quiz') { renderBars(); renderQuizStats(); }
-  if (v === 'karte') setTimeout(() => { map.invalidateSize({ animate: false }); layoutLabels(); }, 0);
+  if (v === 'karte') setTimeout(() => { map.invalidateSize({ animate: false }); gl.map()?.resize(); layoutActive(); }, 0);
 }
 $$('#nav .nav-btn').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
 
@@ -332,8 +394,10 @@ const updateOnline = () => { $('#offline').hidden = navigator.onLine; };
 addEventListener('online', updateOnline); addEventListener('offline', updateOnline); updateOnline();
 
 ctx.quiz = initQuiz(ctx);
+ctx.overview = initOverview(ctx);
 ctx.drive = initDrive(ctx);
-applyLabels(); renderMarkers(); renderList(); renderBars(); showView('karte');
+ctx.game = initGame(ctx);
+applyLabels(); renderMarkers(); renderList(); renderBars(); showView('karte'); syncViewBtn(); applyView();
 
 if (!store.state.settings.introSeen) {
   const dlg = $('#dlg-intro'); dlg.addEventListener('close', () => store.setSetting('introSeen', true));

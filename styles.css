@@ -5,13 +5,14 @@
   --nav-h: 60px; --safe-b: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
   font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--blue); }
 [hidden] { display: none !important; }
 
-#app { display: flex; flex-direction: column; height: 100dvh; }
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }  /* dvh: iPad/iPhone-Adressleiste, aeltere Browser nehmen vh */
 #stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; overflow: clip; background: #e8e4dc; }
 #map { position: absolute; inset: 0; z-index: 0; isolation: isolate; touch-action: none; }
 
@@ -40,7 +41,7 @@ a { color: var(--blue); }
 #banner { position: absolute; left: 10px; right: 78px; top: 10px; z-index: 500; background: #1d232a; color: #fff; border-radius: 14px;
   padding: 10px 14px; font-size: 18px; font-weight: 700; box-shadow: 0 2px 8px #0005; }
 #banner small { display: block; font-weight: 400; font-size: 13px; opacity: .8; }
-#app[data-mode="drive"] #banner { display: none; }
+#app[data-mode="drive"] #banner, #app[data-mode="game"] #banner { display: none; }
 #app[data-mode="quiz"] #banner { pointer-events: none; }
 #nearby { position: absolute; left: 10px; right: 78px; top: 10px; z-index: 500; background: #fff; border-radius: 14px; padding: 8px 12px; box-shadow: 0 2px 8px #0004; font-size: 14px; }
 #nearby button { display: block; width: 100%; min-height: 40px; text-align: left; border: 0; background: none; padding: 4px 0; border-top: 1px solid var(--line); }
@@ -49,6 +50,7 @@ a { color: var(--blue); }
 #toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 3000; background: #1d232a; color: #fff; padding: 10px 16px; border-radius: 22px; max-width: 90vw; font-size: 15px; box-shadow: 0 2px 10px #0006; }
 
 #app[data-mode="drive"] ~ #toast { bottom: auto; top: 110px; }
+#app[data-mode="game"] ~ #toast { bottom: auto; top: 96px; }
 
 /* ---------- Leaflet-Anpassungen (gross, beruehrungsfreundlich) ---------- */
 .leaflet-control-zoom a { width: 48px !important; height: 48px !important; line-height: 48px !important; font-size: 26px !important; }
@@ -61,17 +63,24 @@ a { color: var(--blue); }
 .leaflet-popup-content .pbtn.danger { color: var(--red); }
 .leaflet-popup-close-button { width: 40px !important; height: 40px !important; font-size: 26px !important; }
 
-/* ---------- Pins mit Namen ---------- */
-.pin { position: relative; }
-.pin-dot { position: absolute; left: 8px; top: 12px; width: 28px; height: 28px; background: var(--red); border: 2px solid #fff;
-  border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 4px #0006; }
-.pin-dot::after { content: ""; position: absolute; left: 6px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+/* ---------- Pins mit Namen (gross, gut lesbar) ---------- */
+.pin { position: relative; width: 44px; height: 48px; }
+.maplibregl-marker.pin { position: absolute; }
+.pin-dot { position: absolute; left: 5px; top: 4px; width: 34px; height: 34px; background: var(--red); border: 3px solid #fff;
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 2px 5px #000a; box-sizing: border-box; }
+.pin-ico { position: absolute; left: 5px; top: 4px; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  font-size: 17px; line-height: 1; pointer-events: none; filter: drop-shadow(0 0 1px #000a); }
 .pin.m-gelb .pin-dot { background: var(--yellow); }
 .pin.m-gruen .pin-dot { background: var(--green); }
 .pin.own .pin-dot { background: var(--blue); }
-.pin-label { position: absolute; left: 40px; top: 14px; white-space: nowrap; background: #fffe; border: 1px solid #0003; border-radius: 6px;
-  padding: 1px 6px; font-size: 12px; font-weight: 700; color: #111; pointer-events: none; }
-#map.labels-off .pin-label, .pin.nolabel .pin-label, .pin-label.hide { display: none; }
+/* Beschriftung: weisse Schrift mit dunklem Rand (Halo) – auf hellen und dunklen Karten lesbar. */
+.pin-label { position: absolute; left: 44px; top: 21px; transform: translateY(-50%); white-space: nowrap; pointer-events: none;
+  font-size: 17px; line-height: 1.15; font-weight: 800; letter-spacing: .1px; color: #fff;
+  text-shadow: -2px -2px 0 #0b1b2b, 2px -2px 0 #0b1b2b, -2px 2px 0 #0b1b2b, 2px 2px 0 #0b1b2b, 0 -2px 0 #0b1b2b, 0 2px 0 #0b1b2b, -2px 0 0 #0b1b2b, 2px 0 0 #0b1b2b, 0 0 7px #0b1b2b, 0 0 3px #0b1b2b; }
+.pin-label.pos-l { left: auto; right: 44px; }
+.pin-label.pos-t { left: 22px; top: auto; bottom: 46px; transform: translateX(-50%); }
+.pin-label.pos-b { left: 22px; top: 48px; transform: translateX(-50%); }
+.labels-off .pin-label, .pin.nolabel .pin-label, .pin-label.hide { display: none; }
 .pin.target .pin-dot { animation: pop .4s ease-out; }
 @keyframes pop { from { transform: rotate(-45deg) scale(.3); } to { transform: rotate(-45deg) scale(1); } }
 .tapdot { width: 18px; height: 18px; border-radius: 50%; background: #1565c0; border: 3px solid #fff; box-shadow: 0 1px 4px #0007; }
@@ -140,9 +149,9 @@ dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12
 dialog .row .btn { flex: 1; text-align: center; }
 
 /* ---------- Fahrmodus ---------- */
-#app[data-mode="drive"] #nav, #app[data-mode="drive"] .leaflet-control-zoom { display: none; }
-#app[data-mode="drive"] #map { pointer-events: none; transform-origin: 50% 50%; will-change: transform; }
-#app[data-mode="drive"] .leaflet-control-attribution { display: none; }
+#app[data-mode="drive"] #nav, #app[data-mode="drive"] .leaflet-control-zoom, #app[data-mode="game"] #nav, #app[data-mode="game"] .leaflet-control-zoom { display: none; }
+#app[data-mode="drive"] #map, #app[data-mode="game"] #map { pointer-events: none; transform-origin: 50% 50%; will-change: transform; }
+#app[data-mode="drive"] .leaflet-control-attribution, #app[data-mode="game"] .leaflet-control-attribution { display: none; }
 #car { position: absolute; z-index: 600; width: 40px; height: 70px; margin: -35px 0 0 -20px; filter: drop-shadow(0 3px 3px #0008); pointer-events: none; }
 #drive-hud { position: absolute; left: 0; right: 0; top: 0; z-index: 700; display: flex; align-items: center; gap: 12px; padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 10px;
   background: #1b2128; color: #fff; box-shadow: 0 3px 10px #0007; }
@@ -180,3 +189,115 @@ dialog .row .btn { flex: 1; text-align: center; }
   #quiz-card { max-height: 55vh; }
   .tool { width: 48px; min-height: 48px; }
 }
+
+/* ---------- 3D-Ansicht (MapLibre) ---------- */
+#map3d { position: absolute; inset: 0; z-index: 0; visibility: hidden; touch-action: none; background: #e8e4dc; }
+#app[data-gl="3d"] #map3d { visibility: visible; }
+#app[data-gl="3d"] #map { visibility: hidden; }
+#map3d .maplibregl-ctrl-bottom-left { margin-bottom: 4px; }
+#map3d .maplibregl-ctrl-group button { width: 44px; height: 44px; }
+#map3d .maplibregl-ctrl-attrib { font-size: 11px; }
+#app[data-mode="drive"] #map3d .maplibregl-ctrl-bottom-left, #app[data-mode="drive"] #map3d .maplibregl-ctrl-bottom-right, #app[data-mode="game"] #map3d .maplibregl-ctrl-bottom-left { display: none; }
+#app[data-mode="game"] #map3d .maplibregl-ctrl-bottom-right { bottom: auto; top: 70px; right: 0; }
+#drv-3d { position: absolute; right: 10px; top: 96px; z-index: 710; min-width: 52px; min-height: 44px; border-radius: 12px; border: 2px solid #fff; background: #1d232aee; color: #fff; font-weight: 800; font-size: 16px; }
+#drv-3d[hidden] { display: none; }
+#app[data-gl="3d"] #car svg { transform: perspective(260px) rotateX(48deg); transform-origin: 50% 70%; }
+#app[data-gl="3d"] #car { width: 46px; height: 80px; margin: -56px 0 0 -23px; }
+#app[data-gl="3d"] #car svg { width: 46px; height: 80px; }
+
+.endflag { display: flex; align-items: flex-end; gap: 4px; white-space: nowrap; }
+.endflag span { font-size: 34px; line-height: 34px; }
+.endflag b { font-size: 16px; color: #fff; text-shadow: -2px -2px 0 #0b1b2b, 2px -2px 0 #0b1b2b, -2px 2px 0 #0b1b2b, 2px 2px 0 #0b1b2b, 0 0 6px #0b1b2b; }
+
+/* ---------- Spielmodus "Selber fahren" ---------- */
+#game-hud { position: absolute; inset: 0; z-index: 700; pointer-events: none; color: #fff; }
+#game-hud > * { pointer-events: none; }
+.g-top { display: flex; align-items: center; gap: 10px; padding: calc(6px + env(safe-area-inset-top, 0px)) 10px 6px; background: linear-gradient(#10161cdd, #10161c99); }
+.g-mission { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.g-mission b { font-size: 18px; line-height: 1.2; } .g-mission span { font-size: 13px; opacity: .85; }
+.g-compass { flex: none; display: flex; flex-direction: column; align-items: center; min-width: 64px; }
+.g-compass svg { transition: transform .1s linear; } .g-compass span { font-size: 13px; font-weight: 800; }
+.gbtn { pointer-events: auto; min-width: 48px; min-height: 48px; padding: 6px 12px; border-radius: 14px; border: 2px solid #fff8; background: #1d232acc; color: #fff; font-size: 16px; font-weight: 700; touch-action: manipulation; }
+#game-hud .gbtn { pointer-events: auto; }
+.g-street { position: absolute; left: 0; right: 0; top: 62px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0; }
+.g-street b { font-size: 20px; text-shadow: -2px -2px 0 #0b1b2b, 2px -2px 0 #0b1b2b, -2px 2px 0 #0b1b2b, 2px 2px 0 #0b1b2b, 0 0 8px #0b1b2b; }
+.g-street small { font-size: 14px; font-weight: 700; background: #1d232acc; border-radius: 10px; padding: 1px 8px; margin-top: 2px; }
+.g-street small:empty { display: none; }
+.g-speed { position: absolute; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; align-items: baseline; gap: 6px; background: #10161ccc; border-radius: 16px; padding: 4px 16px; }
+.g-speed b { font-size: 34px; line-height: 1; min-width: 56px; text-align: right; } .g-speed small { font-size: 13px; opacity: .8; }
+.limit { align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; border: 5px solid #d32f2f; background: #fff; color: #111; font-weight: 800; font-size: 16px; }
+.limit.over { background: #ffcdd2; animation: blink .5s infinite alternate; } @keyframes blink { to { background: #fff; } }
+#g-junction { position: absolute; left: 50%; top: 112px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 92%; }
+#g-junction small { background: #1d232acc; border-radius: 10px; padding: 2px 8px; font-size: 13px; font-weight: 700; }
+.jopt { background: #1d232acc; border-radius: 12px; padding: 4px 12px; font-size: 16px; font-weight: 700; border: 2px solid transparent; }
+.jopt.on { background: #f9c80e; color: #1d232a; border-color: #fff; }
+#game-pad { position: absolute; inset: auto 0 0 0; z-index: 720; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 0 calc(14px + env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) calc(14px + env(safe-area-inset-left, 0px)); pointer-events: none; user-select: none; -webkit-user-select: none; }
+#game-pad[hidden] { display: none; }
+#game-pad > div { display: flex; gap: 12px; align-items: flex-end; pointer-events: none; }
+#game-pad button { pointer-events: auto; touch-action: none; -webkit-touch-callout: none; user-select: none; }
+.pad-left { flex-direction: column; align-items: flex-start; gap: 8px !important; }
+.steer-row { display: flex; gap: 12px; pointer-events: none; }
+.pad-mid { display: flex; flex-direction: row; gap: 8px !important; }
+.pbig { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 26px; border: 3px solid #fff; color: #fff; font-size: 38px; font-weight: 800; line-height: 1; box-shadow: 0 5px 14px #0008; opacity: .9; }
+.pbig small { font-size: 12px; font-weight: 700; margin-top: 2px; }
+.pbig.steer { background: #37474f; }
+.pbig.brake { background: #c62828; width: 100px; height: 100px; font-size: 30px; }
+.pbig.gas { background: #2e7d32; width: 124px; height: 124px; border-radius: 34px; font-size: 30px; letter-spacing: 1px; }
+.pbig.down { transform: scale(.93); opacity: 1; filter: brightness(1.25); box-shadow: 0 0 0 5px #fff6, 0 2px 6px #000a; }
+#game-menu { position: absolute; inset: 0; z-index: 800; display: flex; align-items: center; justify-content: center; background: #0009; padding: 10px; overflow-y: auto; }
+#game-menu[hidden] { display: none; }
+.gm-card { background: #fff; color: var(--ink); border-radius: 18px; padding: 16px 18px; width: min(460px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 6px 24px #0008; }
+.gm-card h2 { margin: 0; font-size: 22px; } .gm-card p { margin: 0; } .gm-card .big { font-size: 19px; font-weight: 700; }
+.gm-card .stars { font-size: 44px; color: #f9a825; letter-spacing: 6px; text-align: center; line-height: 1; }
+.speed2 { display: block; font-size: 14px; color: var(--muted); } .speed2 input { width: 100%; height: 36px; accent-color: var(--red); }
+@media (orientation: landscape) and (max-height: 520px) {
+  .g-top { padding-top: 4px; padding-bottom: 4px; } .g-mission b { font-size: 16px; }
+  .g-street { top: 50px; } .g-street b { font-size: 18px; } #g-junction { top: 94px; }
+  .pbig { width: 88px; height: 88px; } .pbig.gas { width: 112px; height: 112px; } .pbig.brake { width: 92px; height: 92px; }
+  .gm-card { padding: 10px 14px; gap: 6px; } .gm-card h2 { font-size: 19px; } .gm-card .stars { font-size: 34px; } .gm-card .btn.big { min-height: 46px; }
+}
+@media (orientation: portrait) {
+  .pbig { width: 74px; height: 74px; font-size: 32px; } .pbig.gas { width: 96px; height: 96px; } .pbig.brake { width: 78px; height: 78px; font-size: 26px; }
+  #game-pad > div { gap: 8px; } .steer-row { gap: 8px; } .pbig small { font-size: 11px; }
+}
+@media (orientation: portrait) and (max-width: 440px) {
+  .g-speed { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+  #game-pad .gbtn { font-size: 13px; padding: 4px 8px; min-width: 40px; }
+  .pbig { width: 66px; height: 66px; } .pbig.gas { width: 88px; height: 88px; } .pbig.brake { width: 70px; height: 70px; }
+  #game-pad > div { gap: 6px; } .steer-row { gap: 6px; }
+}
+
+/* ---------- Uebersichtskarte + Minikarte ---------- */
+#overview-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 900; padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(#0000, #10161cdd 30%); display: flex; flex-direction: column; gap: 6px; }
+#overview-bar[hidden] { display: none; }
+.ov-info { color: #fff; font-size: 14px; font-weight: 700; text-align: center; text-shadow: 0 1px 3px #000; }
+.ov-btns { display: flex; gap: 10px; justify-content: center; } .ov-btns .btn { flex: 1; max-width: 340px; text-align: center; }
+.ov-car { width: 30px; height: 44px; display: flex; align-items: center; justify-content: center; filter: drop-shadow(0 2px 3px #000a); }
+#app[data-overview="1"] #game-pad, #app[data-overview="1"] .g-street, #app[data-overview="1"] .g-speed, #app[data-overview="1"] #g-junction,
+#app[data-overview="1"] #drive-bottom, #app[data-overview="1"] #car, #app[data-overview="1"] #drv-3d, #app[data-overview="1"] .drv-side, #app[data-overview="1"] #minimap { display: none !important; }
+#app[data-overview="1"] #map { pointer-events: auto; }
+#app[data-overview="1"] .leaflet-control-zoom { display: block !important; }
+#app[data-overview="1"] .leaflet-control-attribution { display: block !important; }
+#app[data-overview="1"][data-mode="game"] .g-compass { display: none; }
+#minimap { position: absolute; left: 10px; top: 118px; z-index: 710; width: 132px; height: 132px; border-radius: 16px; overflow: hidden; border: 3px solid #fff; box-shadow: 0 3px 10px #0008; background: #e8e4dc; }
+#minimap[hidden] { display: none; }
+#minimap-map { position: absolute; inset: 0; }
+.mm-attr { position: absolute; right: 2px; bottom: 0; z-index: 1000; font-size: 9px; background: #fffc; padding: 0 3px; border-radius: 4px 0 0 0; pointer-events: none; }
+.drv-side { position: absolute; right: 10px; z-index: 710; width: 52px; min-height: 46px; border-radius: 12px; border: 2px solid #fff; background: #1d232aee; color: #fff; font-size: 20px; line-height: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px; }
+.drv-side small { font-size: 10px; } .drv-side[hidden] { display: none; }
+#drv-map { top: 148px; } #drv-mm { top: 202px; }
+.drv-side[aria-pressed="true"] { background: #2e7d32ee; }
+#app[data-mode="game"] #minimap { top: 66px; width: 120px; height: 120px; }
+@media (orientation: landscape) and (max-height: 520px) { #app[data-mode="game"] #minimap { top: 56px; width: 110px; height: 110px; } #app[data-mode="drive"] #minimap { top: 70px; width: 110px; height: 110px; } #drv-3d { top: 70px; } #drv-map { top: 122px; } #drv-mm { top: 174px; } }
+
+/* ---------- Touch-Haertung (iPad Safari, Chrome Android) ---------- */
+button, .btn, .tool, .nav-btn, .chip, .item, select, summary, label.check { touch-action: manipulation; }   /* kein Doppeltipp-Zoom */
+#stage, #game-hud, #game-pad, #drive-bottom, #drive-hud, #map-tools, #overview-bar, #game-menu button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#game-pad button, #game-pad .pbig { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+#map3d canvas, #map3d { outline: none; -webkit-tap-highlight-color: transparent; }
+@media (min-width: 900px) and (min-height: 700px) {   /* iPad (1024x768, 1366x1024) */
+  .pbig { width: 112px; height: 112px; } .pbig.gas { width: 140px; height: 140px; } .pbig.brake { width: 116px; height: 116px; }
+  .g-mission b { font-size: 20px; } .g-street b { font-size: 22px; }
+}
+#app[data-overview="1"] .leaflet-bottom { margin-bottom: 120px; }

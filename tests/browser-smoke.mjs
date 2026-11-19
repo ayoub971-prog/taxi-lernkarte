@@ -81,6 +81,8 @@ async function main() {
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map((a) => a.value || a.description).join(' '));
     if (m.method === 'Log.entryAdded' && m.params.entry.level === 'error' && !/favicon|tile\.openstreetmap|ERR_INTERNET_DISCONNECTED/.test((m.params.entry.url || '') + m.params.entry.text)) errors.push(m.params.entry.text + ' ' + (m.params.entry.url || ''));
   });
+  // Dieser Test prueft die 2D-Karte (Leaflet): 3D ist abgeschaltet. 3D, Spielmodus und Uebersicht testet tests/browser-3d.mjs.
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `if (!localStorage.getItem('taxi-lernkarte-v1')) localStorage.setItem('taxi-lernkarte-v1', JSON.stringify({ settings: { view3d: false } }))` });
   await send('Runtime.enable'); await send('Log.enable'); await send('Page.enable'); await send('Network.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 2, mobile: true, screenWidth: 412, screenHeight: 915 });
   await send('Emulation.setTouchEmulationEnabled', { enabled: true });
@@ -100,8 +102,8 @@ async function main() {
     const r = await ev(`return { pins: document.querySelectorAll('.pin').length, red: document.querySelectorAll('.pin.m-rot').length,
       attr: document.querySelector('.leaflet-control-attribution').textContent, caches: await caches.keys(), w: innerWidth, scroll: document.documentElement.scrollWidth,
       tiles: document.querySelectorAll('.leaflet-tile').length, ver: document.querySelector('#app-version').textContent }`);
-    assert.equal(r.pins, 34); assert.equal(r.red, 34); assert.match(r.attr, /OpenStreetMap/); assert.ok(r.caches.includes('taxi-lernkarte-shell-v1'), r.caches.join());
-    assert.equal(r.w, 412); assert.ok(r.scroll <= 412, 'horizontales Scrollen: ' + r.scroll); assert.equal(r.ver, '1'); assert.ok(r.tiles > 0);
+    assert.equal(r.pins, 34); assert.equal(r.red, 34); assert.match(r.attr, /OpenStreetMap/); assert.ok(r.caches.some((k) => /^taxi-lernkarte-shell-v\d+$/.test(k)), r.caches.join());
+    assert.equal(r.w, 412); assert.ok(r.scroll <= 412, 'horizontales Scrollen: ' + r.scroll); assert.match(r.ver, /^\d+$/); assert.ok(r.tiles > 0);
     await shot('02-karte');
   });
 

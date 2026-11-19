@@ -3,25 +3,32 @@
 <head>
   <meta charset="utf-8">
   <title>Taxi-Lernkarte</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes"><!-- iPad/iPhone: "Zum Home-Bildschirm" startet ohne Safari-Leiste -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Taxi-Lernkarte">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#b71c1c">
   <meta name="referrer" content="strict-origin-when-cross-origin"><!-- OSM verlangt einen Referer fuer Kacheln -->
   <meta name="description" content="Orte lernen für die Taxi-Prüfung: Wädenswil bis Zürich auf OpenStreetMap, mit Quiz.">
-  <link rel="manifest" href="manifest.webmanifest?v=1">
-  <link rel="icon" href="icons/icon.svg?v=1" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=1">
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=1">
-  <link rel="stylesheet" href="styles.css?v=1">
+  <link rel="manifest" href="manifest.webmanifest?v=2">
+  <link rel="icon" href="icons/icon.svg?v=2" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=2">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=2">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
 <div id="app" data-view="karte" data-mode="normal">
 
   <div id="stage">
     <div id="map" role="application" aria-label="Karte"></div>
+    <div id="map3d" role="application" aria-label="Karte in 3D"></div>
 
     <!-- Schalter auf der Karte -->
     <div id="map-tools">
       <button id="btn-locate" class="tool" type="button" aria-label="Mein Standort">📍<span>Standort</span></button>
+      <button id="btn-3d" class="tool" type="button" aria-pressed="false" aria-label="3D-Ansicht ein oder aus">🧊<span>3D</span></button>
       <button id="btn-labels" class="tool" type="button" aria-pressed="true" aria-label="Namen ein oder aus">🏷️<span>Namen</span></button>
       <button id="btn-route-a" class="tool route-a" type="button" aria-pressed="false" aria-label="Variante A Autobahn anzeigen">A<span>Autobahn</span></button>
       <button id="btn-route-b" class="tool route-b" type="button" aria-pressed="false" aria-label="Variante B Seestrasse anzeigen">B<span>Seestrasse</span></button>
@@ -37,6 +44,9 @@
     <div id="car" hidden aria-hidden="true">
       <svg viewBox="0 0 40 70" width="40" height="70"><rect x="4" y="3" width="32" height="64" rx="10" fill="#f9c80e" stroke="#6b5200" stroke-width="2"/><rect x="9" y="14" width="22" height="12" rx="3" fill="#2b3a4a"/><rect x="9" y="42" width="22" height="14" rx="3" fill="#2b3a4a"/><rect x="14" y="0" width="12" height="6" rx="2" fill="#fff" stroke="#6b5200" stroke-width="1.5"/></svg>
     </div>
+    <button id="drv-3d" type="button" aria-pressed="false" aria-label="3D oder 2D" hidden>3D</button>
+    <button id="drv-map" class="drv-side" type="button" aria-label="Übersichtskarte" hidden>🗺️<small>Karte</small></button>
+    <button id="drv-mm" class="drv-side" type="button" aria-pressed="false" aria-label="Minikarte ein oder aus" hidden>◱<small>Mini</small></button>
     <div id="drive-hud" hidden>
       <div class="turn"><svg id="turn-arrow" viewBox="0 0 24 24" width="44" height="44"><path d="M12 3 L19 12 H14 V21 H10 V12 H5 Z" fill="#fff"/></svg><span id="turn-dist"></span></div>
       <div class="txt"><div id="turn-text"></div><div id="street-now"></div></div>
@@ -52,8 +62,48 @@
         <button id="drv-voice" class="dbtn" type="button" aria-pressed="false" aria-label="Sprachansagen">🔇</button>
         <button id="drv-end" class="dbtn" type="button" aria-label="Fahrt beenden">✕</button>
       </div>
-      <div class="drive-disc">Simulation zum Lernen, kein echtes Navi.</div>
+      <div class="drive-disc">Simulation zum Lernen, kein echtes Navi.<br>Karte: © OpenStreetMap-Mitwirkende · OpenFreeMap</div>
     </div>
+
+    <!-- Spielmodus "Selber fahren" -->
+    <div id="game-hud" hidden>
+      <div class="g-top">
+        <div class="g-mission"><b id="g-goal"></b><span id="g-time"></span></div>
+        <div class="g-compass" aria-label="Richtung zum Ziel"><svg id="g-arrow" viewBox="0 0 24 24" width="40" height="40"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#ffd54f" stroke="#1d232a" stroke-width="1.5" stroke-linejoin="round"/></svg><span id="g-cdist"></span></div>
+        <button class="gbtn" type="button" data-pad="map" aria-label="Übersichtskarte">🗺️ Karte</button>
+        <button class="gbtn" type="button" data-pad="pause" aria-label="Pause">⏸</button>
+      </div>
+      <div id="g-junction" hidden></div>
+      <div class="g-street"><b id="g-street"></b><small id="g-ort"></small></div>
+      <div class="g-speed"><b id="g-kmh">0</b><small>km/h</small><span id="g-limit" class="limit" hidden></span></div>
+    </div>
+    <div id="game-pad" hidden>
+      <div class="pad-left">
+        <div class="pad-mid">
+          <button class="gbtn" type="button" data-pad="uturn" aria-label="Wenden">⤺ Wenden</button>
+          <button class="gbtn" type="button" data-pad="hint" aria-label="Neu berechnen">🧭 Neu berechnen</button>
+        </div>
+        <div class="steer-row">
+          <button class="pbig steer" type="button" data-pad="left" aria-label="Links">◀<small>Links</small></button>
+          <button class="pbig steer" type="button" data-pad="right" aria-label="Rechts">▶<small>Rechts</small></button>
+        </div>
+      </div>
+      <div class="pad-right">
+        <button class="pbig brake" type="button" data-pad="brake" aria-label="Bremse und Rückwärts">🛑<small>Bremse<br>Rückwärts</small></button>
+        <button class="pbig gas" type="button" data-pad="gas" aria-label="Gas">GAS</button>
+      </div>
+    </div>
+    <div id="game-menu" hidden></div>
+
+    <!-- Uebersicht (Fahr- und Spielmodus): frei zoomen und verschieben, dann weiterfahren -->
+    <div id="overview-bar" hidden>
+      <div class="ov-info">Mit zwei Fingern zoomen und verschieben. 🚕 = du, 🏁 = Ziel.</div>
+      <div class="ov-btns">
+        <button id="ov-hint" class="btn big" type="button">🧭 Weg zeigen (−150)</button>
+        <button id="ov-resume" class="btn primary big" type="button">▶ Weiterfahren</button>
+      </div>
+    </div>
+    <div id="minimap" hidden aria-label="Minikarte" role="button"><div id="minimap-map"></div><span class="mm-attr">© OpenStreetMap</span></div>
 
     <!-- Orte: Fortschritt, Filter, Suche, Liste -->
     <section id="panel-orte" class="panel" hidden aria-label="Orte">
@@ -120,6 +170,13 @@
         <label class="check"><input id="set-questions" type="checkbox" checked> Fragen während der Fahrt</label>
         <label class="check"><input id="set-voice" type="checkbox"> Sprachansagen</label>
         <p class="hint">Lernskizze, keine Prüfungsroute. Simulation zum Lernen, kein echtes Navi.</p>
+      </div>
+      <div class="card">
+        <h2>🎮 Selber fahren</h2>
+        <p class="hint">Du steuerst das Taxi selbst: Gas, Bremse, links, rechts – wie auf einer Konsole. Am besten Handy quer halten. Gamepad (Bluetooth) und Pfeiltasten gehen auch.</p>
+        <label class="field">Ziel<select id="game-target"></select></label>
+        <button id="game-start" class="btn primary big" type="button">🎮 Spiel starten</button>
+        <p id="game-best" class="hint"></p>
       </div>
     </section>
 
@@ -203,7 +260,7 @@
 </dialog>
 
 <noscript><p style="padding:1rem">Diese App braucht JavaScript.</p></noscript>
-<script src="vendor/leaflet/leaflet.js?v=1"></script>
-<script type="module" src="js/app.js?v=1"></script>
+<script src="vendor/leaflet/leaflet.js?v=2"></script>
+<script type="module" src="js/app.js?v=2"></script>
 </body>
 </html>
