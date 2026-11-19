@@ -7,7 +7,7 @@
 export const ENABLE_3D = false || new URLSearchParams(location.search).get('3d') === '1';
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 export const PITCH_MAP = 55;      // Neigung auf der normalen Karte
-export const PITCH_DRIVE = 66;    // Neigung im Fahrmodus (Blick von hinten auf das Auto)
+export const PITCH_DRIVE = 58;    // Neigung im Fahrmodus (Blick von hinten auf das Auto)
 
 export function webglOk() {
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
@@ -21,14 +21,16 @@ export function initMap3d(ctx) {
   let locMarker = null, endMarker = null, endPos = null, endLabel = '';
   const moveCbs = [];
 
-  // 3D ist vorerst AUS (Schalter). Zum Einschalten ENABLE_3D = true (oder ?3d=1 in der Adresse). Der Code bleibt unveraendert.
-  const supported = () => ENABLE_3D && !broken && (glOk ??= webglOk());
+  // WebGL da? Die Fahrersicht (geneigte, mitdrehende Karte) laeuft mit MapLibre. Die 3D-Gebaeude und die 3D-Ansicht der normalen Karte
+  // sind ueber ENABLE_3D (oder ?3d=1) getrennt geschaltet und standardmaessig AUS.
+  const supported = () => !broken && new URLSearchParams(location.search).get('gl') !== '0' && (glOk ??= webglOk());   // ?gl=0 schaltet MapLibre ab (2D-Rueckfall testen)
+  const showBuildings = () => ENABLE_3D || ctx.store.state.settings.buildings3d === true;
 
   function loadScript() {
     if (window.maplibregl) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=3'; document.head.append(link);
-      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=3';
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=4'; document.head.append(link);
+      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=4';
       s.onload = () => resolve(); s.onerror = () => reject(new Error('maplibre-script'));
       document.head.append(s);
     });
@@ -70,12 +72,27 @@ export function initMap3d(ctx) {
   function tune(m) {
     for (const l of m.getStyle().layers) if (/^poi/.test(l.id)) m.setLayoutProperty(l.id, 'visibility', 'none');
     if (m.getLayer('building-3d')) {
+      m.setLayoutProperty('building-3d', 'visibility', showBuildings() ? 'visible' : 'none');
       m.setPaintProperty('building-3d', 'fill-extrusion-color', ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 6],
         0, '#e9dfd0', 12, '#e2d6c4', 30, '#d3cbc2', 70, '#c0c4cc', 160, '#a9b1bf']);
       m.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.95);
       m.setPaintProperty('building-3d', 'fill-extrusion-vertical-gradient', true);
     }
+    boldRoads(m);
     m.setLight({ anchor: 'map', position: [1.4, 215, 38], intensity: 0.5, color: '#fff4e0' });
+  }
+
+  /** Fahrersicht: Strassen dicker und kontrastreicher (eigene Ebenen ueber dem Stil, unter den Beschriftungen). Aus dem Stil, kein Zusatz-Download. */
+  function boldRoads(m) {
+    if (!m.getSource('openmaptiles') || m.getLayer('taxi-road-casing')) return;
+    const before = m.getStyle().layers.find((l) => l.type === 'symbol')?.id;
+    const major = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'], minor = ['minor', 'service', 'busway'];
+    const w = (a, b, c) => ['interpolate', ['exponential', 1.5], ['zoom'], 12, a, 15, b, 18, c];
+    const base = { type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', layout: { 'line-cap': 'round', 'line-join': 'round' } };
+    const notTunnel = ['!', ['in', ['get', 'brunnel'], ['literal', ['tunnel']]]];
+    const mk = (id, cls, color, width) => m.addLayer({ ...base, id, filter: ['all', ['in', ['get', 'class'], ['literal', cls]], notTunnel], paint: { 'line-color': color, 'line-width': width } }, before);
+    mk('taxi-road-casing-minor', minor, '#9aa3ad', w(1.2, 5, 22)); mk('taxi-road-fill-minor', minor, '#ffffff', w(0.6, 3.4, 18));
+    mk('taxi-road-casing', major, '#5d6670', w(2.2, 8, 34)); mk('taxi-road-fill', major, ['match', ['get', 'class'], 'motorway', '#ff9a3d', 'trunk', '#ffb347', 'primary', '#ffd54f', 'secondary', '#fff0a8', '#ffffff'], w(1.4, 6, 29));
   }
 
   // ------------------------------------------------------------ Linien (Routen, Fahrstrecke)
@@ -156,7 +173,7 @@ export function initMap3d(ctx) {
   new ResizeObserver(() => map?.resize()).observe(document.getElementById('stage'));
 
   return {
-    supported, ensure, setPlaces, clearPlaces, closePopups, openPopup, setLocation, setEnd, setLine,
+    supported, enable3d: ENABLE_3D, setBuildings: (on) => { if (map?.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', on || ENABLE_3D ? 'visible' : 'none'); }, ensure, setPlaces, clearPlaces, closePopups, openPopup, setLocation, setEnd, setLine,
     syncFrom2D, syncTo2D, flyTo, fitPoints, follow, resetPadding,
     onMove: (f) => moveCbs.push(f),
     map: () => map, container: box, active: false, loaded: () => !!map,

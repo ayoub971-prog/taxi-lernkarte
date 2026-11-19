@@ -285,10 +285,10 @@ dialog .row .btn { flex: 1; text-align: center; }
 .mm-attr { position: absolute; right: 2px; bottom: 0; z-index: 1000; font-size: 9px; background: #fffc; padding: 0 3px; border-radius: 4px 0 0 0; pointer-events: none; }
 .drv-side { position: absolute; right: 10px; z-index: 710; width: 52px; min-height: 46px; border-radius: 12px; border: 2px solid #fff; background: #1d232aee; color: #fff; font-size: 20px; line-height: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px; }
 .drv-side small { font-size: 10px; } .drv-side[hidden] { display: none; }
-#drv-map { top: 148px; } #drv-mm { top: 202px; }
+#drv-map { top: 164px; } #drv-mm { top: 218px; }
 .drv-side[aria-pressed="true"] { background: #2e7d32ee; }
 #app[data-mode="game"] #minimap { top: 66px; width: 120px; height: 120px; }
-@media (orientation: landscape) and (max-height: 520px) { #app[data-mode="game"] #minimap { top: 56px; width: 110px; height: 110px; } #app[data-mode="drive"] #minimap { top: 70px; width: 110px; height: 110px; } #drv-3d { top: 70px; } #drv-map { top: 122px; } #drv-mm { top: 174px; } }
+@media (orientation: landscape) and (max-height: 520px) { #app[data-mode="game"] #minimap { top: 56px; width: 110px; height: 110px; } #app[data-mode="drive"] #minimap { top: 70px; width: 110px; height: 110px; } #drv-3d { top: 70px; } #drv-map { top: 136px; } #drv-mm { top: 188px; } }
 
 /* ---------- Touch-Haertung (iPad Safari, Chrome Android) ---------- */
 button, .btn, .tool, .nav-btn, .chip, .item, select, summary, label.check { touch-action: manipulation; }   /* kein Doppeltipp-Zoom */
@@ -315,3 +315,12 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 @media (min-width: 900px) and (min-height: 700px) { #zoom-ctl button { width: 64px; height: 64px; } }
 #app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { left: calc(84px + env(safe-area-inset-left, 0px)); }
 @media (min-width: 900px) and (min-height: 700px) { #app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { left: calc(92px + env(safe-area-inset-left, 0px)); } }
+
+/* Umschalter Fahrersicht / Karte mit Norden oben */
+.view-toggle b { font-size: 22px; line-height: 1; font-weight: 400; }
+.view-toggle small { font-size: 11px; font-weight: 800; }
+#drv-3d.view-toggle { width: 68px; min-height: 60px; padding: 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+#drv-3d.view-toggle[aria-pressed="true"] { background: #1565c0ee; }
+#g-view.view-toggle { display: flex; align-items: center; gap: 4px; min-height: 52px; }
+#g-view.view-toggle[aria-pressed="true"] { background: #1565c0cc; }
+@media (orientation: portrait) and (max-width: 440px) { #g-view.view-toggle small { display: none; } #g-view.view-toggle { min-width: 56px; justify-content: center; } }

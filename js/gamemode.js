@@ -2,12 +2,12 @@
 // Gas / Bremse / Links / Rechts als Bildschirm-Knoepfe (Multitouch), per Gamepad oder Tastatur.
 // Mission: "Fahre zum Paradeplatz" – Pfeil und Distanz zeigen die Richtung, am Ende gibt es Punkte und Sterne.
 // Rechenkern: game.js (Node-getestet). Eingabe: controls.js. Kamera: 3D hinter dem Auto (MapLibre) oder 2D gedreht (Leaflet).
-import * as G from './game.js?v=3';
-import { createControls } from './controls.js?v=3';
-import { angleDiff } from './drive.js?v=3';
-import { formatDistance, distanceM } from './geo.js?v=3';
-import { STUFEN } from './places.js?v=3';
-import { $, el, toast } from './ui.js?v=3';
+import * as G from './game.js?v=4';
+import { createControls } from './controls.js?v=4';
+import { angleDiff } from './drive.js?v=4';
+import { formatDistance, distanceM } from './geo.js?v=4';
+import { STUFEN } from './places.js?v=4';
+import { $, el, toast } from './ui.js?v=4';
 
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const ARROW = { links: '◀', geradeaus: '▲', rechts: '▶' };
@@ -46,7 +46,7 @@ export function initGame(ctx) {
 
   // ------------------------------------------------------------ Strassennetz laden
   function loadGraph() {
-    return (graphP ??= fetch('data/graph.json?v=3').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(G.buildGraph)
+    return (graphP ??= fetch('data/graph.json?v=4').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(G.buildGraph)
       .catch((e) => { graphP = null; throw e; }));
   }
 
@@ -96,7 +96,7 @@ export function initGame(ctx) {
     const W = stage.clientWidth, H = stage.clientHeight;
     const cx = W / 2, cy = H * (gl.active ? 0.72 : 0.68);
     geo = { W, H, cx, cy };
-    if (gl.active) { mapEl.style.cssText = ''; gl.map()?.resize(); }
+    if (gl.active) { mapEl.style.cssText = ''; carEl.style.transform = ''; gl.map()?.resize(); }
     else {
       const D = Math.ceil(Math.hypot(W, H)) + 40;
       Object.assign(mapEl.style, { inset: 'auto', width: D + 'px', height: D + 'px', left: cx - D / 2 + 'px', top: cy - D / 2 + 'px' });
@@ -108,10 +108,11 @@ export function initGame(ctx) {
     const car = g.car, pos = G.carPos(car), target = G.carHeading(car);
     g.heading = first ? target : (g.heading + angleDiff(g.heading, target) * Math.min(1, dt * 5) + 360) % 360;
     const eff = Math.abs(car.v) * g.scale;
-    if (gl.active) gl.follow(pos.lat, pos.lng, g.heading, eff < 4 ? 17.6 : eff < 12 ? 17.1 : eff < 25 ? 16.6 : 16.1, geo.W, geo.H, geo.cx, geo.cy, 62);
+    if (gl.active) gl.follow(pos.lat, pos.lng, g.heading, ctx.zoomctl.zoomGl(eff < 4 ? 17.6 : eff < 12 ? 17.1 : eff < 25 ? 16.6 : 16.1), geo.W, geo.H, geo.cx, geo.cy);
     else {
       map.setView([pos.lat, pos.lng], ctx.zoomctl.zoom(eff < 4 ? 18 : eff < 12 ? 17 : eff < 25 ? 16.5 : 16), { animate: false });
-      mapEl.style.transform = `rotate(${-g.heading}deg)`;
+      if (ctx.driverView()) { mapEl.style.transform = `rotate(${-g.heading}deg)`; carEl.style.transform = ''; }
+      else { mapEl.style.transform = ''; carEl.style.transform = `rotate(${g.heading}deg)`; }
     }
   }
   ctx.viewListeners.push(() => { if (g && !ctx.forceOverview) { layoutGame(); frame(true); } });
@@ -185,7 +186,7 @@ export function initGame(ctx) {
         el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: haptics() ? '' : null, onchange: (e) => store.setSetting('haptics', e.target.checked) }), ' Vibration'),
         el('label', { class: 'speed2' }, el('span', {}, `Tempo ×${g.scale} (gilt ab der nächsten Mission)`), el('input', { type: 'range', min: 1, max: 4, step: 1, value: String(scaleSetting()), onchange: (e) => store.setSetting('gameScale', Number(e.target.value)) })),
         el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: ctx.overview.enabled() ? '' : null, onchange: (e) => { ctx.overview.setEnabled(e.target.checked); ctx.overview.show(e.target.checked, openOverview); } }), ' Minikarte in der Ecke'),
-        ctx.gl.supported() ? el('button', { class: 'btn', type: 'button', onclick: () => { menu.hidden = true; ctx.gl.supported() && toggle3d(); } }, gl.active ? 'Zu 2D wechseln' : 'Zu 3D wechseln') : null,
+        ctx.gl.enable3d && ctx.gl.supported() ? el('button', { class: 'btn', type: 'button', onclick: () => { menu.hidden = true; ctx.gl.supported() && toggle3d(); } }, gl.active ? 'Zu 2D wechseln' : 'Zu 3D wechseln') : null,
         el('button', { class: 'btn', type: 'button', onclick: () => stop() }, 'Spiel beenden'));
     } else if (kind === 'done') {
       const r = g.rating;

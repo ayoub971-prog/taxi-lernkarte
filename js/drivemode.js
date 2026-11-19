@@ -2,10 +2,10 @@
 // ist stark herangezoomt und dreht sich in Fahrtrichtung (CSS-Drehung des Karten-Containers).
 // Oben ein Navi-Balken (Strasse, naechster Abbieger, Distanz), unten Steuerung, dazwischen
 // Pruefungsfragen ("Wohin geht es?", "Welcher Ort kommt als Naechstes?"). Alles ist Simulation.
-import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=3';
-import { recordWrong, recordRight, allKeys } from './repeat.js?v=3';
-import { formatDistance } from './geo.js?v=3';
-import { $, el, toast, speak } from './ui.js?v=3';
+import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=4';
+import { recordWrong, recordRight, allKeys } from './repeat.js?v=4';
+import { formatDistance } from './geo.js?v=4';
+import { $, el, toast, speak } from './ui.js?v=4';
 
 export function initDrive(ctx) {
   const { L, map, store, gl } = ctx;
@@ -27,7 +27,7 @@ export function initDrive(ctx) {
     if (gl.active) {   // 3D: Kamera hinter dem Auto, das Auto sitzt tief im Bild
       const cx3 = landscape() ? W * 0.27 : W / 2, cy3 = H * (landscape() ? 0.72 : 0.74);
       geo = { W, H, cx: cx3, cy: cy3 };
-      mapEl.style.cssText = '';
+      mapEl.style.cssText = ''; car.style.transform = '';
       Object.assign(car.style, { left: cx3 + 'px', top: cy3 + 'px' });
       gl.map()?.resize();
       return;
@@ -59,7 +59,6 @@ export function initDrive(ctx) {
     gl.setLine('drive', pts, { color: '#1976d2', width: 8 }); gl.setEnd(end.lat, end.lng);
     L.marker([end.lat, end.lng], { icon: L.divIcon({ html: '<div style="font-size:30px;line-height:30px">🏁</div>', className: '', iconSize: [30, 30], iconAnchor: [5, 28] }), interactive: false }).addTo(layer);
     [hud, bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = false; });
-    $('#drv-3d').hidden = !ctx.gl.supported();
     ctx.overview.show(ctx.overview.enabled(), openOverview); syncMiniBtn();
     qBox.hidden = true;
     layoutDrive();
@@ -101,10 +100,11 @@ export function initDrive(ctx) {
   function frame(first, dt = 0, now = 0) {
     const r = d.route, pos = posAt(r, d.s), target = headingAt(r, d.s);
     d.heading = first ? target : (d.heading + angleDiff(d.heading, target) * Math.min(1, dt * 4) + 360) % 360;
-    if (gl.active) gl.follow(pos.lat, pos.lng, d.heading, zoomFor3d(d.mul), geo.W, geo.H, geo.cx, geo.cy);
+    if (gl.active) gl.follow(pos.lat, pos.lng, d.heading, ctx.zoomctl.zoomGl(zoomFor3d(d.mul)), geo.W, geo.H, geo.cx, geo.cy);
     else {
       map.setView([pos.lat, pos.lng], ctx.zoomctl.zoom(zoomFor(d.mul)), { animate: false });
-      mapEl.style.transform = `rotate(${-d.heading}deg)`;
+      if (ctx.driverView()) { mapEl.style.transform = `rotate(${-d.heading}deg)`; car.style.transform = ''; }
+      else { mapEl.style.transform = ''; car.style.transform = `rotate(${d.heading}deg)`; }   // Norden oben: das Auto dreht sich
     }
     if (first || now - d.hudAt > 200) { d.hudAt = now; updateHud(); }
   }

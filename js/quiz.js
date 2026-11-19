@@ -1,6 +1,6 @@
 // Quiz-Logik ohne Browser: Fragen waehlen, Antwortoptionen, Auswertung. Zufall ist austauschbar (rng),
 // damit die Tests deterministisch laufen.
-import { distanceM, scorePoints, isHit } from './geo.js?v=3';
+import { distanceM, scorePoints, isHit } from './geo.js?v=4';
 
 /** Fisher-Yates-Mischen (neues Array). */
 export function shuffle(arr, rng = Math.random) {

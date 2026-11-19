@@ -4,8 +4,8 @@
 //   - An Kreuzungen waehlt die Lenk-Eingabe (links / geradeaus / rechts) den Abzweig, der am besten passt.
 //   - Gas/Bremse steuern das Tempo, vor Kreuzungen bremst eine kleine Fahrhilfe automatisch ab.
 //   - Missionen: "Fahre von A nach B", Kuerzester Weg (Dijkstra) fuer Hinweis, Punkte und Sterne.
-import { distanceM } from './geo.js?v=3';
-import { posAt, bearing, angleDiff } from './drive.js?v=3';
+import { distanceM } from './geo.js?v=4';
+import { posAt, bearing, angleDiff } from './drive.js?v=4';
 
 /** Tempolimit (km/h) wenn OSM keinen Wert hat – grobe Annahme je Strassenklasse (siehe graph.cls). */
 export const DEFAULT_KMH = [100, 80, 50, 50, 50, 50, 50, 20];

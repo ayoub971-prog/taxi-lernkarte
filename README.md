@@ -8,7 +8,7 @@ Live: <https://ayoub971-prog.github.io/taxi-lernkarte/>
 
 ## Funktionen
 
-> **Stand Version 2: Die 3D-Ansicht ist vorläufig ABGESCHALTET** (Schalter `ENABLE_3D = false` in `js/map3d.js`, Code und Tests bleiben). Zum Ausprobieren: Adresse mit `?3d=1` öffnen (`…/taxi-lernkarte/?3d=1`) – noch nicht fertig getestet (Bildrate/Layout im 3D-Spiel offen). Alle Punkte unten mit «3D» gelten nur dann. Grosse Namen, Spielmodus, Übersicht und Minikarte laufen in 2D.
+> **Stand Version 4:** Die **Fahrersicht** ist neu (Spielmodus und Fahrmodus): Die Karte dreht sich mit, die Fahrtrichtung zeigt immer nach oben, die Kamera ist schräg gekippt (ca. 58°) und das Taxi steht im unteren Drittel, so siehst du die Strasse voraus wie im Auto. Sie läuft mit MapLibre + OpenFreeMap (Strassen verstärkt, Strassennamen, **ohne 3D-Gebäude**). Der Knopf «🧭 Norden oben» / «🚗 Fahrersicht» (oben im Spiel, rechts im Fahrmodus) wechselt zwischen Fahrersicht und Karte mit Norden oben, die Wahl wird gemerkt (Standard: Fahrersicht). Ohne WebGL, ohne Internet oder wenn das Gerät zu langsam ist (unter ca. 14 Bilder pro Sekunde), bleibt die bisherige 2D-Karte (dreht mit). Die normale Karte (Lernen, Quiz, Prüfung) bleibt immer 2D. Die 3D-Gebäude und die 3D-Ansicht der normalen Karte sind weiter **AUS** (Schalter `ENABLE_3D` in `js/map3d.js`, oder `?3d=1`; Gebäude in der Fahrersicht: Einstellung `buildings3d`, noch ohne Knopf). Lenken bleibt relativ zum Auto (Links = links).
 
 * **Karte** mit OpenStreetMap-Kacheln (Quellenangabe immer sichtbar), Leaflet **lokal im Repo** (kein CDN).
 * **3D-Ansicht** (Knopf «3D»/«2D»): geneigte Karte mit **echten OSM-Gebäuden als Körper** (MapLibre GL JS lokal im Repo + OpenFreeMap-Vektorkacheln, siehe Quellen). Ohne WebGL oder ohne Internet bleibt automatisch die 2D-Karte. Quiz und Prüfung laufen immer in 2D (genaues Tippen).
@@ -96,7 +96,7 @@ Nur HTML, CSS und ES-Module, keine Build-Schritte, keine Abhängigkeiten ausser 
 | `js/quiz.js`, `js/quizmode.js` | Quiz-Logik (rein) und Bedienung: Lernen/Üben/Prüfen/Heute/Stufe 4 |
 | `js/progress.js`, `js/repeat.js` | Lernstand (6 Boxen, Ampel) und Fehlerliste für Abbiegefragen/Aufgaben |
 | `js/drive.js`, `js/drivemode.js` | Fahr-Rechenkern (rein) und Fahrmodus (Karte drehen oder 3D-Kamera, Navi-Balken, Fragen) |
-| `js/map3d.js` | 3D-Karte (MapLibre + OpenFreeMap): Gebäude, Pins, Linien, Kamera, Rückfall bei fehlendem WebGL |
+| `js/map3d.js` | MapLibre + OpenFreeMap: Fahrersicht-Kamera (`follow`, `jumpTo` pro Bild), Strassen verstärken, optional Gebäude, Pins, Linien, Rückfall bei fehlendem WebGL |
 | `js/labels.js` | grosse Namen: vier Plätze pro Pin, Überlappungen vermeiden (für Leaflet und MapLibre) |
 | `js/game.js`, `js/gamemode.js`, `js/controls.js` | Spielmodus: Graph, Fahrphysik, Missionen, Dijkstra (rein, Node-getestet) · Bedienung/HUD/Menüs · Eingabe (Touch, Tastatur, Gamepad) |
 | `js/overview.js` | Übersichtskarte und Minikarte (Fahr- und Spielmodus) |
@@ -114,7 +114,8 @@ Speicher im Browser: `localStorage`-Schlüssel `taxi-lernkarte-v1` (eigene Orte,
 ```
 npm test          # Node-Tests: Orte (Rechteck, Dubletten), Distanz/Quiz, Lernstand, Sicherung, Routen, Fahrlogik, Service Worker
 npm run smoke     # echter Chrome (headless): 2D-Test und Spiel-Test in 2D (Touch, Übersicht, iPad-Grössen, Bildrate); Screenshots in /workspace/taxi-shots und /workspace/taxi-shots/v2
-node tests/browser-3d.mjs   # nur für 3D (braucht Internet, öffnet die App mit ?3d=1)
+node tests/browser-view.mjs   # Fahrersicht (braucht Internet): Bearing = Heading, Pitch, Umschalter, Fallback, Zoom, Übersicht, Layouts, Bildrate
+node tests/browser-3d.mjs   # nur für die alte 3D-Ansicht mit Gebäuden (braucht Internet, öffnet die App mit ?3d=1)
 python3 tests/webkit-smoke.py   # WebKit (Playwright): Fehler, Layout, Touch-Eigenschaften (braucht `python3 -m playwright install webkit`)
 ```
 

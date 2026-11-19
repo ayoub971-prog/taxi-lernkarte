@@ -88,7 +88,7 @@ async function main() {
   await send('Emulation.setTouchEmulationEnabled', { enabled: true });
   await send('Emulation.setGeolocationOverride', { latitude: 47.3641, longitude: 8.5308, accuracy: 30 });
   await send('Browser.grantPermissions', { permissions: ['geolocation'] }).catch(() => {});
-  const URL0 = `http://127.0.0.1:${PORT}/`;
+  const URL0 = `http://127.0.0.1:${PORT}/?gl=0`;
   await send('Page.navigate', { url: URL0 });
   await waitFor('window.__taxi && document.querySelectorAll(".pin").length > 0', 10000);
   await waitFor('navigator.serviceWorker.controller', 10000).catch(async () => { await send('Page.reload'); await waitFor('window.__taxi && navigator.serviceWorker.controller', 10000); });

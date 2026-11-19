@@ -11,6 +11,8 @@ export function initZoomCtl(ctx) {
   const active = () => !ctx.forceOverview && !!(ctx.drive?.isActive?.() || ctx.game?.isActive?.());
 
   /** Zoom fuer diesen Standardwert (Leaflet-Zoom, 2D). */
+  /** Zoom fuer MapLibre (Zoom = Leaflet-Zoom - 1). */
+  const zoomGl = (base) => Math.min(ZMAX - 1, Math.max(ZMIN - 1, base + delta));
   const zoom = (base) => Math.min(ZMAX, Math.max(ZMIN, base + delta));
   function set(v) {
     const n = clampD(v); if (n === delta) return;
@@ -60,5 +62,5 @@ export function initZoomCtl(ctx) {
   stage?.addEventListener('touchend', end, { capture: true }); stage?.addEventListener('touchcancel', end, { capture: true });
 
   sync();
-  return { zoom, set, step, reset: () => set(0), delta: () => delta, onChange: (f) => listeners.push(f), active };
+  return { zoom, zoomGl, set, step, reset: () => set(0), delta: () => delta, onChange: (f) => listeners.push(f), active };
 }

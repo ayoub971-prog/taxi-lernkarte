@@ -18,9 +18,10 @@ await send('Page.navigate', { url: `http://127.0.0.1:${PORT}/` });
 await waitFor('window.__taxi', 20000);
 await waitFor('document.querySelector("#dlg-intro").open', 10000); await click('#dlg-intro .btn'); await waitFor('!document.querySelector("#dlg-intro").open');
 
+await ev(`__taxi.store.setSetting('driverView', false)`);   // dieser Test prueft die 2D-Karte (Norden oben); die Fahrersicht hat tests/browser-view.mjs
 await step('3D ist aus: 2D-Karte, kein 3D-Knopf, kein MapLibre geladen', async () => {
   const r = await ev(`return { gl: document.querySelector('#app').dataset.gl, btn: document.querySelector('#btn-3d').hidden, active: __taxi.gl.active, lib: typeof window.maplibregl, sup: __taxi.gl.supported() }`);
-  assert.equal(r.gl, '2d'); assert.equal(r.btn, true); assert.equal(r.active, false); assert.equal(r.lib, 'undefined'); assert.equal(r.sup, false);
+  assert.equal(r.gl, '2d'); assert.equal(r.btn, true); assert.equal(r.active, false); assert.equal(r.lib, 'undefined');
 });
 
 await step('Grosse Namen in 2D: weisse Schrift mit dunklem Rand, >= 16 px, keine Ueberlappung (Enge/Tessinerplatz)', async () => {

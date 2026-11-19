@@ -1,19 +1,19 @@
 // Taxi-Lernkarte – Hauptprogramm: Karte, Pins, Orte-Liste, eigene Orte, Sicherung, Navigation.
 // Quiz/Pruefung steckt in quizmode.js, der Fahrmodus in drivemode.js. Beide bekommen das Objekt `ctx`.
-import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=3';
-import { distanceM, formatDistance } from './geo.js?v=3';
-import { createStore, makeBackup, parseBackup } from './store.js?v=3';
-import * as progress from './progress.js?v=3';
-import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=3';
-import { initQuiz } from './quizmode.js?v=3';
-import { initDrive } from './drivemode.js?v=3';
-import { initGame } from './gamemode.js?v=3';
-import { initOverview } from './overview.js?v=3';
-import { initZoomCtl } from './zoomctl.js?v=3';
-import { initMap3d } from './map3d.js?v=3';
-import { layoutLabels, labelPriority } from './labels.js?v=3';
+import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=4';
+import { distanceM, formatDistance } from './geo.js?v=4';
+import { createStore, makeBackup, parseBackup } from './store.js?v=4';
+import * as progress from './progress.js?v=4';
+import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=4';
+import { initQuiz } from './quizmode.js?v=4';
+import { initDrive } from './drivemode.js?v=4';
+import { initGame } from './gamemode.js?v=4';
+import { initOverview } from './overview.js?v=4';
+import { initZoomCtl } from './zoomctl.js?v=4';
+import { initMap3d } from './map3d.js?v=4';
+import { layoutLabels, labelPriority } from './labels.js?v=4';
 
-export const APP_VERSION = '3';
+export const APP_VERSION = '4';
 const L = window.L;
 
 // ---------------------------------------------------------------- Speicher
@@ -66,7 +66,9 @@ ctx.gl = gl; ctx.viewListeners = [];
 
 // ---------------------------------------------------------------- 2D / 3D umschalten
 /** 3D gewuenscht? Standard: ja, wenn WebGL vorhanden ist. Gemerkt wird nur die Wahl der Person. */
-const want3d = () => store.state.settings.view3d !== false && gl.supported() && !ctx.forceOverview;
+const driverViewOn = () => store.state.settings.driverView !== false;   // Fahrersicht (Standard an) oder Karte mit Norden oben
+const want3d = () => gl.supported() && !ctx.forceOverview && !ctx.glSlow
+  && ((gl.enable3d && store.state.settings.view3d !== false && ctx.mode === 'normal') || (driverViewOn() && (ctx.mode === 'drive' || ctx.mode === 'game')));
 let applying = Promise.resolve();
 /** Zeigt je nach Modus die 3D- oder die 2D-Karte. Quiz und Pruefung laufen immer in 2D (genaues Tippen). */
 function applyView() {
@@ -79,7 +81,7 @@ async function doApplyView() {
     try { try { await gl.ensure(); } catch (e0) { if (!gl.supported()) throw e0; await new Promise((r) => setTimeout(r, 1500)); await gl.ensure(); } }   // 1 Wiederholung: beim allerersten Start uebernimmt gerade der Service Worker
     catch (e) {
       console.warn('3D nicht verfuegbar:', e?.message || e);
-      if (!gl.failedToasted) { gl.failedToasted = true; toast(gl.supported() ? '3D braucht Internet – die 2D-Karte bleibt aktiv.' : 'Dein Gerät kann kein 3D (WebGL) – die 2D-Karte bleibt aktiv.', 4500); }
+      if (!gl.failedToasted) { gl.failedToasted = true; toast(gl.supported() ? 'Die Fahrersicht braucht Internet – die 2D-Karte bleibt aktiv.' : 'Dein Gerät kann keine Fahrersicht (WebGL) – die 2D-Karte bleibt aktiv.', 4500); }
       syncViewBtn(); return;
     }
     if (!(want3d() && (ctx.mode === 'normal' || ctx.mode === 'drive' || ctx.mode === 'game'))) return doApplyView();   // Modus hat sich waehrend des Ladens geaendert
@@ -95,16 +97,32 @@ async function doApplyView() {
 }
 function syncViewBtn() {
   const on = gl.active;
-  for (const b of $$('#btn-3d, #drv-3d')) { b.setAttribute('aria-pressed', String(on)); b.querySelector('span') ? (b.querySelector('span').textContent = on ? '2D' : '3D') : (b.textContent = on ? '2D' : '3D'); }
-  $('#btn-3d').hidden = !gl.supported();
+  for (const b of $$('#btn-3d')) { b.setAttribute('aria-pressed', String(on)); b.querySelector('span').textContent = on ? '2D' : '3D'; }
+  $('#btn-3d').hidden = !(gl.supported() && gl.enable3d);
+  const dv = driverViewOn();   // Knopf zeigt, wohin man wechselt
+  for (const b of $$('.view-toggle')) { b.setAttribute('aria-pressed', String(dv)); b.querySelector('b').textContent = dv ? '🧭' : '🚗'; b.querySelector('small').textContent = dv ? 'Norden oben' : 'Fahrersicht'; b.setAttribute('aria-label', dv ? 'Zur Karte mit Norden oben wechseln' : 'Zur Fahrersicht wechseln'); }
 }
 ctx.applyView = applyView;
 ctx.glLost = () => { toast('3D wurde vom Gerät beendet – die 2D-Karte übernimmt.', 4500); applyView(); };
 // iOS: Seitenzoom per Zwei-Finger-Geste und Doppeltipp-Zoom verhindern (die Karten haben ihr eigenes Zoomen)
 ['gesturestart', 'gesturechange'].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+ctx.driverView = driverViewOn;
+ctx.toggleDriverView = () => { store.setSetting('driverView', !driverViewOn()); gl.failedToasted = false; ctx.glSlow = false; return applyView(); };
+for (const b of $$('.view-toggle')) b.addEventListener('click', () => ctx.toggleDriverView());
+// Zu langsam? Laeuft die Fahrersicht dauerhaft unter ~14 Bildern pro Sekunde, wechselt die App auf die 2D-Karte (nicht in automatisierten Tests).
+(function slowWatch() {
+  if (navigator.webdriver) return;
+  let n = 0, t0 = 0, bad = 0;
+  (function tick(t) {
+    if (!gl.active) { n = 0; t0 = 0; bad = 0; } else {
+      if (!t0) t0 = t; n++;
+      if (t - t0 > 4000) { const fps = n / ((t - t0) / 1000); bad = fps < 14 && !document.hidden ? bad + 1 : 0; n = 0; t0 = t; if (bad >= 2) { ctx.glSlow = true; toast('Die Fahrersicht läuft auf diesem Gerät zu langsam – die 2D-Karte übernimmt.', 5000); applyView(); bad = 0; } }
+    }
+    requestAnimationFrame(tick);
+  })(0);
+})();
 function toggle3d() { store.setSetting('view3d', !gl.active); gl.failedToasted = false; return applyView(); }
 $('#btn-3d').addEventListener('click', toggle3d);
-$('#drv-3d').addEventListener('click', toggle3d);
 
 // ---------------------------------------------------------------- Pins
 function pinNode(p, { label = true, cls = '' } = {}) {
@@ -184,7 +202,7 @@ $('#btn-labels').addEventListener('click', () => { store.setSetting('labels', !(
 
 // ---------------------------------------------------------------- Routen A / B (Lernskizze)
 let routesPromise = null;
-function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=3').then((r) => r.json()); }
+function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=4').then((r) => r.json()); }
 const routeLayers = {};
 const ROUTE_STYLE = {
   A: { color: '#1565c0', weight: 5, title: 'Variante A – Autobahn A3' },

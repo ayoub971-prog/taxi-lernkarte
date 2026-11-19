@@ -16,9 +16,12 @@ Du bist Entwickler:in für eine kleine, **kostenlose** Web-App. Halte dich an di
 8. Nach jeder Änderung **Version erhöhen** (siehe Abschnitt 7), sonst sehen Handy und iPad die neue Version nicht.
 9. Sag ehrlich, was du **nicht** testen konntest (echtes Samsung, echtes iPad).
 
-## 1b. Stand: 3D ist vorläufig AUS
+## 1b. Stand: Fahrersicht an, 3D-Gebäude AUS
 
-Version 2 und 3 sind **ohne 3D** veröffentlicht, damit der Benutzer Namen, Spielmodus, Übersicht und Minikarte sofort ausprobieren kann. 3D ist hinter dem Schalter `ENABLE_3D` in `js/map3d.js` (Standard `false`; mit `?3d=1` in der Adresse einschaltbar). Der 3D-Code ist fertig gebaut, aber nicht ganz abgenommen: `node tests/browser-3d.mjs` lief zuletzt 18 von 19 grün, der letzte Fehler (Hochformat-Anzeige im 3D-Spiel) wurde per CSS behoben, der volle Lauf danach steht aus. Offen vor dem Einschalten: Test auf echtem Samsung/iPad (Bildrate), dann `ENABLE_3D = true`, Version erhöhen.
+* **Fahrersicht (ab Version 4):** Im Spielmodus und Fahrmodus fährt eine MapLibre-Kamera hinter dem Taxi: `Bearing = Heading` (weich geglättet in `gamemode.js`/`drivemode.js`), `Pitch` 58°, das Taxi im unteren Drittel, pro Bild ein `jumpTo` (`gl.follow` in `js/map3d.js`, keine gestapelten Animationen). Standard an (`settings.driverView`, Umschalter `.view-toggle`: `#g-view` im Spiel, `#drv-3d` im Fahrmodus, Funktion `ctx.toggleDriverView`). Aus = Leaflet-Karte mit Norden oben und drehendem Auto. Die Gebäude-Ebene `building-3d` ist versteckt (`settings.buildings3d` oder `ENABLE_3D` schalten sie ein), Strassen werden mit eigenen Ebenen `taxi-road-*` verstärkt (`boldRoads`).
+* **Rückfälle auf die 2D-Karte** (die auch mitdreht): kein WebGL, Stil nicht ladbar (kein Internet), `webglcontextlost`, zu langsam (`slowWatch` in `app.js`: zwei Messfenster à 4 s unter 14 fps, nicht bei `navigator.webdriver`, setzt `ctx.glSlow`), Übersichtskarte offen (immer 2D).
+* **`want3d()` in `js/app.js`** entscheidet, welche Karte aktiv ist. Die normale Karte, Quiz und Prüfung sind immer 2D. `ENABLE_3D` (Standard `false`, oder `?3d=1`) schaltet nur die alte 3D-Ansicht der normalen Karte frei. `node tests/browser-3d.mjs` testet diese alte Ansicht (zuletzt 18 von 19 grün, der Fehler ist per CSS behoben, voller Lauf steht aus).
+* Offen: Test auf echtem Samsung/iPad (Bildrate der Fahrersicht), Knopf «Gebäude 3D» (nur Einstellung `buildings3d`), Strassennamen-Lesbarkeit in der Fahrersicht prüfen.
 
 ## 2. Ziel und Benutzer
 
@@ -32,7 +35,7 @@ Version 2 und 3 sind **ohne 3D** veröffentlicht, damit der Benutzer Namen, Spie
 
 * **Live:** <https://ayoub971-prog.github.io/taxi-lernkarte/>
 * **Repo (öffentlich):** <https://github.com/ayoub971-prog/taxi-lernkarte> (Branch `main`, GitHub Pages veröffentlicht den Ordner `/` automatisch nach jedem Push, dauert ca. 1 Minute).
-* **Aktuelle Version:** 3 (`VERSION` in `sw.js`, `APP_VERSION` in `js/app.js`, `?v=3` in HTML und Modulen).
+* **Aktuelle Version:** 4 (`VERSION` in `sw.js`, `APP_VERSION` in `js/app.js`, `?v=4` in HTML und Modulen).
 * Lizenz: MIT.
 
 ## 4. Architektur
@@ -101,7 +104,8 @@ Die App selber ruft im Betrieb **nur** `tile.openstreetmap.org` und `tiles.openf
 npm test                              # Node-Tests (30): Orte, Quiz, Lernstand, Routen, Service Worker, Spiel-Kern (Graph, Dijkstra, Physik, Autopilot, Missionen)
 node tests/browser-smoke.mjs          # echter Chrome headless, 2D, Handyformat, Screenshots nach /workspace/taxi-shots
 node tests/browser-2d.mjs             # Auslieferung ohne 3D: Namen, Spielmodus 2D (Touch, Mehrfinger), Zoom während der Fahrt, Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate (12 Schritte)
-node tests/browser-3d.mjs             # (öffnet die App mit ?3d=1) 3D, Namen, Fahrmodus 3D, Spielmodus mit echten Touch-Ereignissen, Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate; Screenshots nach /workspace/taxi-shots/v2 (SHOTS_DIR änderbar)
+node tests/browser-view.mjs           # Fahrersicht (braucht Internet): Bearing = Heading, Pitch, Umschalter, Fallback, Zoom, Übersicht, Layouts, Bildrate
+node tests/browser-3d.mjs             # alte 3D-Ansicht (öffnet die App mit ?3d=1) 3D, Namen, Fahrmodus 3D, Spielmodus mit echten Touch-Ereignissen, Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate; Screenshots nach /workspace/taxi-shots/v2 (SHOTS_DIR änderbar)
 python3 tests/webkit-smoke.py         # WebKit (Playwright): Fehler, Layout, Touch-Eigenschaften, Spielstart
 ```
 
@@ -114,9 +118,9 @@ python3 tests/webkit-smoke.py         # WebKit (Playwright): Fehler, Layout, Tou
 ## 7. Neue Version veröffentlichen
 
 1. Änderungen machen, `npm test` und die Browser-Tests laufen lassen.
-2. `node tools/bump-version.mjs 4` (Zahl = neue Version). Das setzt `VERSION` in `sw.js`, `APP_VERSION` in `js/app.js` und alle `?v=` in `index.html`, `manifest.webmanifest` und den Modulen.
+2. `node tools/bump-version.mjs 5` (Zahl = neue Version). Das setzt `VERSION` in `sw.js`, `APP_VERSION` in `js/app.js` und alle `?v=` in `index.html`, `manifest.webmanifest` und den Modulen.
 3. `git add -A && git commit -m "..." && git push` (Branch `main`). GitHub Pages baut automatisch.
-4. Prüfen: <https://ayoub971-prog.github.io/taxi-lernkarte/sw.js> zeigt die neue `VERSION`; Dateien wie `js/app.js?v=4` geben 200.
+4. Prüfen: <https://ayoub971-prog.github.io/taxi-lernkarte/sw.js> zeigt die neue `VERSION`; Dateien wie `js/app.js?v=5` geben 200.
 5. Auf Handy/iPad die App einmal ganz schliessen und neu öffnen (Service Worker wechselt beim zweiten Start). Bei Manifest-Änderungen (z. B. Ausrichtung) die installierte App neu installieren.
 6. Strassennetz neu bauen (selten): `bash tools/fetch-graph-raw.sh /pfad/osm-raw` (6 Abfragen, ca. 3 Minuten, Pausen nicht kürzen), dann `node tools/build-graph.mjs /pfad/osm-raw` → `data/graph.json`, dann `npm test`.
 
