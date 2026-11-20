@@ -2,10 +2,10 @@
 // ist stark herangezoomt und dreht sich in Fahrtrichtung (CSS-Drehung des Karten-Containers).
 // Oben ein Navi-Balken (Strasse, naechster Abbieger, Distanz), unten Steuerung, dazwischen
 // Pruefungsfragen ("Wohin geht es?", "Welcher Ort kommt als Naechstes?"). Alles ist Simulation.
-import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=4';
-import { recordWrong, recordRight, allKeys } from './repeat.js?v=4';
-import { formatDistance } from './geo.js?v=4';
-import { $, el, toast, speak } from './ui.js?v=4';
+import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=5';
+import { recordWrong, recordRight, allKeys } from './repeat.js?v=5';
+import { formatDistance } from './geo.js?v=5';
+import { $, el, toast, speak } from './ui.js?v=5';
 
 export function initDrive(ctx) {
   const { L, map, store, gl } = ctx;
@@ -43,11 +43,12 @@ export function initDrive(ctx) {
     stop(true);
     ctx.quiz.stop();
     ctx.setMode('drive'); ctx.setMarkersVisible(false); ctx.showView('karte');
+    ctx.restrict.start();
     const along = placesAlong(route, ctx.allPlaces());
     const weakKeys = along.filter((a) => ctx.progress.mastery(store.state.progress, a.place.id) === 'rot').map((a) => 'ort:' + a.place.id);
     const repeatKeys = new Set([...allKeys(store.state.repeat, 'turn:' + route.id), ...weakKeys]);
     d = {
-      route, destName: opts.destName || route.title, along, s: 0, mul: Number($('#drv-speed').value), playing: false, heading: headingAt(route, 0),
+      route, destName: opts.destName || route.title, destId: opts.destId || null, along, s: 0, mul: Number($('#drv-speed').value), playing: false, heading: headingAt(route, 0),
       qs: store.state.settings.questions === false ? [] : planQuestions(route, along, ctx.allPlaces(), { repeatKeys }),
       asked: 0, right: 0, said: {}, finished: false, last: 0, hudAt: 0, zoom: 0, pending: null,
     };
@@ -71,7 +72,7 @@ export function initDrive(ctx) {
   function stop(silent = false) {
     if (!d) return;
     cancelAnimationFrame(raf); d = null;
-    layer.clearLayers(); gl.setLine('drive', null); gl.setEnd(null);
+    layer.clearLayers(); gl.setLine('drive', null); gl.setEnd(null); ctx.restrict.stop();
     ctx.overview.close(); ctx.overview.show(false);
     [hud, bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = true; });
     mapEl.style.cssText = ''; car.style.cssText = '';
@@ -99,6 +100,7 @@ export function initDrive(ctx) {
   /** Zeichnet einen Schritt: Karte zentrieren, drehen, HUD aktualisieren. */
   function frame(first, dt = 0, now = 0) {
     const r = d.route, pos = posAt(r, d.s), target = headingAt(r, d.s);
+    ctx.restrict.update(pos, first);
     d.heading = first ? target : (d.heading + angleDiff(d.heading, target) * Math.min(1, dt * 4) + 360) % 360;
     if (gl.active) gl.follow(pos.lat, pos.lng, d.heading, ctx.zoomctl.zoomGl(zoomFor3d(d.mul)), geo.W, geo.H, geo.cx, geo.cy);
     else {
@@ -165,7 +167,7 @@ export function initDrive(ctx) {
     d.finished = true; d.playing = false; syncPlayBtn(); updateHud();
     qBox.replaceChildren(el('div', { class: 'qtext' }, '🏁 Ziel erreicht'),
       el('div', { class: 'qfb' }, d.asked ? `Fragen: ${d.right} von ${d.asked} richtig.` : 'Gute Fahrt gehabt!'),
-      el('button', { class: 'btn primary', type: 'button', onclick: () => start(d.route, { destName: d.destName }) }, 'Nochmal fahren'),
+      el('button', { class: 'btn primary', type: 'button', onclick: () => start(d.route, { destName: d.destName, destId: d.destId }) }, 'Nochmal fahren'),
       el('button', { class: 'btn', type: 'button', style: 'margin-top:8px', onclick: () => { stop(); } }, 'Beenden'));
     qBox.hidden = false;
   }
@@ -202,14 +204,15 @@ export function initDrive(ctx) {
     try {
       const data = await ctx.routesAB();
       const title = key === 'A' ? 'Autobahn A3: Wädenswil → Albisgütli' : 'Seestrasse: Wädenswil → Zürich (Bürkliplatz)';
-      start(prepRoute(data.routes[key], 'route-' + key, title), { destName: key === 'A' ? 'Albisgütli' : 'Bürkliplatz' });
+      start(prepRoute(data.routes[key], 'route-' + key, title), { destName: key === 'A' ? 'Albisgütli' : 'Bürkliplatz', destId: key === 'A' ? 'albisguetli' : 'buerkliplatz' });
     } catch { toast('Route konnte nicht geladen werden.'); }
   }
+  $('#drv-self').addEventListener('click', () => { const id = d?.destId || undefined; stop(true); ctx.game.start({ targetId: id }); });   // gleiches Ziel im Spielmodus
   $('#drv-start-a').addEventListener('click', () => startAB('A'));
   $('#drv-start-b').addEventListener('click', () => startAB('B'));
   $('#drv-start-exam').addEventListener('click', async () => {
     const pick = await ctx.quiz.pickPair(); if (!pick) return;
-    start(pick.route, { destName: pick.b.name });
+    start(pick.route, { destName: pick.b.name, destId: pick.b.id });
     toast(`Fahre von ${pick.a.label} nach ${pick.b.label}`, 4000);
   });
 

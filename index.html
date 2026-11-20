@@ -12,11 +12,11 @@
   <meta name="theme-color" content="#b71c1c">
   <meta name="referrer" content="strict-origin-when-cross-origin"><!-- OSM verlangt einen Referer fuer Kacheln -->
   <meta name="description" content="Orte lernen für die Taxi-Prüfung: Wädenswil bis Zürich auf OpenStreetMap, mit Quiz.">
-  <link rel="manifest" href="manifest.webmanifest?v=4">
-  <link rel="icon" href="icons/icon.svg?v=4" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=4">
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=4">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="manifest" href="manifest.webmanifest?v=5">
+  <link rel="icon" href="icons/icon.svg?v=5" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=5">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=5">
 </head>
 <body>
 <div id="app" data-view="karte" data-mode="normal">
@@ -57,6 +57,7 @@
       <div class="txt"><div id="turn-text"></div><div id="street-now"></div></div>
     </div>
     <div id="drive-bottom" hidden>
+      <button id="drv-self" class="btn primary big" type="button">🎮 Selber steuern</button>
       <div id="drive-q" hidden></div>
       <div id="drive-info"></div>
       <div id="drive-controls">
@@ -71,6 +72,7 @@
     </div>
 
     <!-- Spielmodus "Selber fahren" -->
+    <div id="ban-alert" hidden role="alert"><span class="ban-ico"><svg viewBox="0 0 32 32" width="46" height="46"><circle cx="16" cy="16" r="14" fill="#d32f2f" stroke="#fff" stroke-width="2.5"/><rect x="7" y="13" width="18" height="6" rx="1" fill="#fff"/></svg></span><div><b>Fahrverbot</b><small></small></div></div>
     <div id="game-hud" hidden>
       <div class="g-top">
         <div class="g-mission"><b id="g-goal"></b><span id="g-time"></span></div>
@@ -169,6 +171,14 @@
     <section id="panel-fahren" class="panel" hidden aria-label="Fahren">
       <div class="panel-head"><h1>Fahren</h1></div>
       <div class="card">
+        <h2>🎮 Selber fahren</h2>
+        <p class="hint">Du steuerst das Taxi selbst: Gas, Bremse, links, rechts – wie auf einer Konsole. Am besten Handy quer halten. Gamepad (Bluetooth) und Pfeiltasten gehen auch.</p>
+        <label class="field">Ziel<select id="game-target"></select></label>
+        <button id="game-start" class="btn primary big" type="button">🎮 Spiel starten</button>
+        <p id="game-best" class="hint"></p>
+      </div>
+      <div class="card">
+        <h2>🚕 Auto-Navi (das Taxi fährt von selbst)</h2>
         <p class="hint">Das Auto fährt auf echten Strassen. Die Karte dreht sich in Fahrtrichtung.</p>
         <button id="drv-start-a" class="btn big" type="button"><b class="dotA">A</b> Autobahn A3: Wädenswil → Albisgütli</button>
         <button id="drv-start-b" class="btn big" type="button"><b class="dotB">B</b> Seestrasse: Wädenswil → Zürich</button>
@@ -176,13 +186,6 @@
         <label class="check"><input id="set-questions" type="checkbox" checked> Fragen während der Fahrt</label>
         <label class="check"><input id="set-voice" type="checkbox"> Sprachansagen</label>
         <p class="hint">Lernskizze, keine Prüfungsroute. Simulation zum Lernen, kein echtes Navi.</p>
-      </div>
-      <div class="card">
-        <h2>🎮 Selber fahren</h2>
-        <p class="hint">Du steuerst das Taxi selbst: Gas, Bremse, links, rechts – wie auf einer Konsole. Am besten Handy quer halten. Gamepad (Bluetooth) und Pfeiltasten gehen auch.</p>
-        <label class="field">Ziel<select id="game-target"></select></label>
-        <button id="game-start" class="btn primary big" type="button">🎮 Spiel starten</button>
-        <p id="game-best" class="hint"></p>
       </div>
     </section>
 
@@ -266,7 +269,7 @@
 </dialog>
 
 <noscript><p style="padding:1rem">Diese App braucht JavaScript.</p></noscript>
-<script src="vendor/leaflet/leaflet.js?v=4"></script>
-<script type="module" src="js/app.js?v=4"></script>
+<script src="vendor/leaflet/leaflet.js?v=5"></script>
+<script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

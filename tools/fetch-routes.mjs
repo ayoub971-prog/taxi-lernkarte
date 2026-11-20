@@ -4,7 +4,7 @@
 // einmal gebaut und das Ergebnis im Repo gespeichert. Die App selbst fragt NIE einen Routendienst.
 // Start:  node tools/fetch-routes.mjs        (dauert ca. 3 Minuten, ca. 140 Anfragen)
 import fs from 'node:fs';
-import { PLACES } from '../js/places.js?v=4';
+import { PLACES } from '../js/places.js?v=5';
 
 const BASE = 'https://router.project-osrm.org/route/v1/driving/';
 const P = Object.fromEntries(PLACES.map((p) => [p.id, p]));

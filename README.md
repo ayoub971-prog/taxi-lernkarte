@@ -8,7 +8,9 @@ Live: <https://ayoub971-prog.github.io/taxi-lernkarte/>
 
 ## Funktionen
 
-> **Stand Version 4:** Die **Fahrersicht** ist neu (Spielmodus und Fahrmodus): Die Karte dreht sich mit, die Fahrtrichtung zeigt immer nach oben, die Kamera ist schräg gekippt (ca. 58°) und das Taxi steht im unteren Drittel, so siehst du die Strasse voraus wie im Auto. Sie läuft mit MapLibre + OpenFreeMap (Strassen verstärkt, Strassennamen, **ohne 3D-Gebäude**). Der Knopf «🧭 Norden oben» / «🚗 Fahrersicht» (oben im Spiel, rechts im Fahrmodus) wechselt zwischen Fahrersicht und Karte mit Norden oben, die Wahl wird gemerkt (Standard: Fahrersicht). Ohne WebGL, ohne Internet oder wenn das Gerät zu langsam ist (unter ca. 14 Bilder pro Sekunde), bleibt die bisherige 2D-Karte (dreht mit). Die normale Karte (Lernen, Quiz, Prüfung) bleibt immer 2D. Die 3D-Gebäude und die 3D-Ansicht der normalen Karte sind weiter **AUS** (Schalter `ENABLE_3D` in `js/map3d.js`, oder `?3d=1`; Gebäude in der Fahrersicht: Einstellung `buildings3d`, noch ohne Knopf). Lenken bleibt relativ zum Auto (Links = links).
+> **Stand Version 5:** **Fahrverbot-Markierung.** Wege, auf denen Autos nicht fahren dürfen (Fussgängerzonen, Fusswege, Velowege, Treppen, Feldwege, Busspuren, Wege mit «Autos verboten»), sind im Spielmodus und im Fahrmodus **rot-weiss gestrichelt** und haben an den Einfahrten ein rotes **Fahrverbot-Zeichen** (in der Fahrersicht und in der 2D-Karte). Einbahnstrassen zeigen Pfeile in der erlaubten Richtung; in der Gegenrichtung steht kurz vor der Einfahrt das Zeichen «Einfahrt verboten». Willst du im Spiel in so einen Weg oder falsch in eine Einbahnstrasse abbiegen, bleibt das Taxi auf der Strasse, es erscheint **«⛔ Fahrverbot»**, das Handy vibriert und es gibt **100 Punkte Abzug** (und den dritten Stern nicht). Im Panel «Fahren» steht «🎮 Selber fahren» jetzt ganz oben, und im Fahrmodus (Auto-Navi) startet der grosse Knopf «🎮 Selber steuern» das Spiel mit demselben Ziel.
+>
+> **Version 4:** Die **Fahrersicht** ist neu (Spielmodus und Fahrmodus): Die Karte dreht sich mit, die Fahrtrichtung zeigt immer nach oben, die Kamera ist schräg gekippt (ca. 58°) und das Taxi steht im unteren Drittel, so siehst du die Strasse voraus wie im Auto. Sie läuft mit MapLibre + OpenFreeMap (Strassen verstärkt, Strassennamen, **ohne 3D-Gebäude**). Der Knopf «🧭 Norden oben» / «🚗 Fahrersicht» (oben im Spiel, rechts im Fahrmodus) wechselt zwischen Fahrersicht und Karte mit Norden oben, die Wahl wird gemerkt (Standard: Fahrersicht). Ohne WebGL, ohne Internet oder wenn das Gerät zu langsam ist (unter ca. 14 Bilder pro Sekunde), bleibt die bisherige 2D-Karte (dreht mit). Die normale Karte (Lernen, Quiz, Prüfung) bleibt immer 2D. Die 3D-Gebäude und die 3D-Ansicht der normalen Karte sind weiter **AUS** (Schalter `ENABLE_3D` in `js/map3d.js`, oder `?3d=1`; Gebäude in der Fahrersicht: Einstellung `buildings3d`, noch ohne Knopf). Lenken bleibt relativ zum Auto (Links = links).
 
 * **Karte** mit OpenStreetMap-Kacheln (Quellenangabe immer sichtbar), Leaflet **lokal im Repo** (kein CDN).
 * **3D-Ansicht** (Knopf «3D»/«2D»): geneigte Karte mit **echten OSM-Gebäuden als Körper** (MapLibre GL JS lokal im Repo + OpenFreeMap-Vektorkacheln, siehe Quellen). Ohne WebGL oder ohne Internet bleibt automatisch die 2D-Karte. Quiz und Prüfung laufen immer in 2D (genaues Tippen).
@@ -45,6 +47,8 @@ Live: <https://ayoub971-prog.github.io/taxi-lernkarte/>
 
 ## Grenzen
 
+* **Fahrverbot-Daten (Version 5):** Die Markierung kommt aus OpenStreetMap (Fahrersicht: Vektorkacheln von OpenFreeMap; 2D und Zeichen: `data/noentry.json`, einmalig über Overpass geholt). Was in OSM fehlt oder falsch eingetragen ist, fehlt auch hier. Busspuren sind nur dort sichtbar, wo OSM sie als eigenen Weg (`busway`) führt, nicht als Spur auf einer normalen Strasse. Abbiegeverbote, Ampeln und zeitlich begrenzte Sperren gibt es nicht. In der Fahrersicht sind in der Innenstadt viele Fusswege rot, das ist gewollt, kann aber unruhig aussehen.
+
 * **Kartenkacheln brauchen beim ersten Ansehen eines Ausschnitts Internet.** Es gibt bewusst *kein* Vorab-Laden ganzer Gebiete (OSM-Kachelregeln). Ohne Netz sind nur schon gesehene Ausschnitte sichtbar.
 * Die Routen sind **Lernskizzen** aus einer einmaligen Abfrage des öffentlichen OSRM-Demo-Servers (Stand 18.11.2026). Verkehr, Baustellen und spätere Strassenänderungen sind nicht berücksichtigt. Route B führt über die Bahnhöfe der Orte (sie wurde so gebaut, dass sie an jedem Ort vorbeikommt) und folgt deshalb nicht überall genau der Hauptstrasse. Die Fahrhinweise stammen aus OSRM und sind auf Deutsch zusammengesetzt, nicht amtlich.
 * Die Koordinaten sind Punkte von OSM-Objekten (Bahnhof, Platz, Gebäude). «Zentrum»-Orte sind ungefähre Ortsmitten. «Spital Kilchberg» ist die Bushaltestelle «Kilchberg Spital».
@@ -70,6 +74,10 @@ Live: <https://ayoub971-prog.github.io/taxi-lernkarte/>
 5. Neue Version veröffentlichen (siehe unten).
 
 Eigene Orte (nur auf deinem Gerät) legst du in der App mit langem Drücken an – dafür ist kein Code nötig.
+
+## Fahrverbot-Daten neu bauen (selten)
+
+`bash tools/fetch-noentry-raw.sh /pfad/osm-noentry` (6 Abfragen an Overpass mit 20 s Pause, nicht kürzen), dann `node tools/build-noentry.mjs /pfad/osm-noentry /pfad/osm-raw` → `data/noentry.json`. Danach Version erhöhen.
 
 ## Routen neu berechnen (selten nötig)
 
@@ -99,6 +107,7 @@ Nur HTML, CSS und ES-Module, keine Build-Schritte, keine Abhängigkeiten ausser 
 | `js/map3d.js` | MapLibre + OpenFreeMap: Fahrersicht-Kamera (`follow`, `jumpTo` pro Bild), Strassen verstärken, optional Gebäude, Pins, Linien, Rückfall bei fehlendem WebGL |
 | `js/labels.js` | grosse Namen: vier Plätze pro Pin, Überlappungen vermeiden (für Leaflet und MapLibre) |
 | `js/game.js`, `js/gamemode.js`, `js/controls.js` | Spielmodus: Graph, Fahrphysik, Missionen, Dijkstra (rein, Node-getestet) · Bedienung/HUD/Menüs · Eingabe (Touch, Tastatur, Gamepad) |
+| `js/restrict.js` | Fahrverbot: rot-weisse Linien und Zeichen in der 2D-Karte, Zeichen für die Fahrersicht (Daten `data/noentry.json`) |
 | `js/overview.js` | Übersichtskarte und Minikarte (Fahr- und Spielmodus) |
 | `js/zoomctl.js` | Zoom während der Fahrt: Knöpfe, Pinch, Mausrad, Tasten, Zuschlag `settings.driveZoom` |
 | `js/store.js` | localStorage, JSON-Sicherung |
@@ -116,6 +125,7 @@ npm test          # Node-Tests: Orte (Rechteck, Dubletten), Distanz/Quiz, Lernst
 npm run smoke     # echter Chrome (headless): 2D-Test und Spiel-Test in 2D (Touch, Übersicht, iPad-Grössen, Bildrate); Screenshots in /workspace/taxi-shots und /workspace/taxi-shots/v2
 node tests/browser-view.mjs   # Fahrersicht (braucht Internet): Bearing = Heading, Pitch, Umschalter, Fallback, Zoom, Übersicht, Layouts, Bildrate
 node tests/browser-3d.mjs   # nur für die alte 3D-Ansicht mit Gebäuden (braucht Internet, öffnet die App mit ?3d=1)
+node tests/browser-ban.mjs   # Fahrverbot: Panel-Reihenfolge, «Selber steuern», Sperre (Text, Vibration, Punktabzug), Markierung in 2D und Fahrersicht (Fahrersicht braucht Internet)
 python3 tests/webkit-smoke.py   # WebKit (Playwright): Fehler, Layout, Touch-Eigenschaften (braucht `python3 -m playwright install webkit`)
 ```
 

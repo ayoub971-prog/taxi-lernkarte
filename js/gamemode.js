@@ -2,12 +2,13 @@
 // Gas / Bremse / Links / Rechts als Bildschirm-Knoepfe (Multitouch), per Gamepad oder Tastatur.
 // Mission: "Fahre zum Paradeplatz" – Pfeil und Distanz zeigen die Richtung, am Ende gibt es Punkte und Sterne.
 // Rechenkern: game.js (Node-getestet). Eingabe: controls.js. Kamera: 3D hinter dem Auto (MapLibre) oder 2D gedreht (Leaflet).
-import * as G from './game.js?v=4';
-import { createControls } from './controls.js?v=4';
-import { angleDiff } from './drive.js?v=4';
-import { formatDistance, distanceM } from './geo.js?v=4';
-import { STUFEN } from './places.js?v=4';
-import { $, el, toast } from './ui.js?v=4';
+import { KIND_TEXT } from './restrict.js?v=5';
+import * as G from './game.js?v=5';
+import { createControls } from './controls.js?v=5';
+import { angleDiff } from './drive.js?v=5';
+import { formatDistance, distanceM } from './geo.js?v=5';
+import { STUFEN } from './places.js?v=5';
+import { $, el, toast } from './ui.js?v=5';
 
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const ARROW = { links: '◀', geradeaus: '▲', rechts: '▶' };
@@ -24,6 +25,13 @@ export function initGame(ctx) {
   const sound = () => set('sound', false) === true;
   const scaleSetting = () => Math.min(4, Math.max(1, Number(set('gameScale', 2)) || 2));
 
+  /** Grosse Warnung «Fahrverbot» (Zeichen + Text), blendet nach 2.2 s aus. */
+  function showBan(kind) {
+    const b = $('#ban-alert'); if (!b) return;
+    b.querySelector('b').textContent = 'Fahrverbot'; b.querySelector('small').textContent = (KIND_TEXT[kind] || 'Verbotener Weg') + ' · −100 Punkte';
+    b.hidden = false; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    clearTimeout(showBan.t); showBan.t = setTimeout(() => { b.hidden = true; }, 2200);
+  }
   // ------------------------------------------------------------ Hilfen: Ton, Vollbild
   function beep(freq = 660, ms = 120, type = 'sine') {
     if (!sound()) return;
@@ -46,7 +54,8 @@ export function initGame(ctx) {
 
   // ------------------------------------------------------------ Strassennetz laden
   function loadGraph() {
-    return (graphP ??= fetch('data/graph.json?v=4').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(G.buildGraph)
+    return (graphP ??= Promise.all([fetch('data/graph.json?v=5').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }), ctx.restrict.load()])
+      .then(([raw, ne]) => { const gr = G.buildGraph(raw); G.buildBlocked(gr, ne); gr.wrongWay = G.wrongWayGates(gr); return gr; })
       .catch((e) => { graphP = null; throw e; }));
   }
 
@@ -62,8 +71,9 @@ export function initGame(ctx) {
     const scale = scaleSetting();
     const m = G.makeMission(graph, ctx.allPlaces(), { targetId: opts.targetId, startId: opts.startId, weightOf, scale });
     if (!m) { toast('Für diese Auswahl gibt es keine Mission.'); return; }
-    g = { m, car: m.car, scale, state: 'ready', mistakes: 0, hints: 0, heading: G.carHeading(m.car), last: 0, hudAt: 0, nearAt: 0, near: '', opts, gamepadSeen: false };
+    g = { m, car: m.car, scale, state: 'ready', mistakes: 0, hints: 0, violations: 0, heading: G.carHeading(m.car), last: 0, hudAt: 0, nearAt: 0, near: '', opts, gamepadSeen: false };
     ctx.setMode('game'); ctx.setMarkersVisible(false); ctx.showView('karte');
+    ctx.restrict.start(graph.wrongWay || []);
     [hud, pad, carEl].forEach((n) => { n.hidden = false; });
     controls = createControls({ root: pad, haptics, onPause: () => togglePause(), onUturn: uturn, onHint: () => { hint(); }, onMap: openOverview });
     ctx.overview.show(ctx.overview.enabled(), openOverview);
@@ -81,7 +91,7 @@ export function initGame(ctx) {
     cancelAnimationFrame(raf); clearTimeout(hintTimer);
     controls?.destroy(); controls = null; g = null;
     ctx.overview.close(); ctx.overview.show(false);
-    layer.clearLayers(); gl.setLine('hint', null); gl.setEnd(null);
+    layer.clearLayers(); gl.setLine('hint', null); gl.setEnd(null); ctx.restrict.stop();
     [hud, pad, carEl, menu].forEach((n) => { n.hidden = true; });
     mapEl.style.cssText = ''; carEl.style.cssText = '';
     ctx.setMode('normal'); ctx.setMarkersVisible(true); ctx.refresh();
@@ -106,6 +116,7 @@ export function initGame(ctx) {
   }
   function frame(first, dt = 0) {
     const car = g.car, pos = G.carPos(car), target = G.carHeading(car);
+    ctx.restrict.update(pos, first);
     g.heading = first ? target : (g.heading + angleDiff(g.heading, target) * Math.min(1, dt * 5) + 360) % 360;
     const eff = Math.abs(car.v) * g.scale;
     if (gl.active) gl.follow(pos.lat, pos.lng, g.heading, ctx.zoomctl.zoomGl(eff < 4 ? 17.6 : eff < 12 ? 17.1 : eff < 25 ? 16.6 : 16.1), geo.W, geo.H, geo.cx, geo.cy);
@@ -129,6 +140,7 @@ export function initGame(ctx) {
       if (inp.gamepad && !g.gamepadSeen) { g.gamepadSeen = true; toast('🎮 Gamepad erkannt', 2500); }
       for (const ev of G.step(graph, g.car, inp, dt, { scale: g.scale, distTo: g.m.distTo })) {
         if (ev.type === 'mistake') { g.mistakes += 1; toast('Falsch abgebogen – du entfernst dich vom Ziel.', 3000); beep(180, 250, 'square'); buzz([60, 40, 60]); }
+        else if (ev.type === 'noentry') { g.violations += 1; g.banAt = performance.now(); showBan(ev.kind); beep(150, 320, 'square'); buzz([120, 60, 120, 60, 200]); }
         else if (ev.type === 'bump') buzz(30);
       }
       if (G.arrived(g.car, g.m.target, g.m.arriveR)) finish();
@@ -157,7 +169,7 @@ export function initGame(ctx) {
     const tt = G.toTarget(car, t);
     $('#g-cdist').textContent = formatDistance(tt.dist);
     $('#g-arrow').style.transform = `rotate(${angleDiff(g.heading, tt.bearing)}deg)`;
-    $('#g-time').textContent = `⏱ ${fmtTime(car.time)}   ✖ ${g.mistakes}${g.hints ? `   🧭 ${g.hints}` : ''}`;
+    $('#g-time').textContent = `⏱ ${fmtTime(car.time)}   ✖ ${g.mistakes}${g.hints ? `   🧭 ${g.hints}` : ''}${g.violations ? `   ⛔ ${g.violations}` : ''}`;
     const la = G.lookAhead(graph, car, lastInput.steer || 0), box = $('#g-junction');
     if (la.dist < 140 && car.v >= 0 && la.options.length > 0 && (la.options.length > 1 || la.deadEnd)) {
       const items = [...la.options].sort((a, b) => a.angle - b.angle);
@@ -193,7 +205,7 @@ export function initGame(ctx) {
       body.push(el('h2', {}, r.stars === 3 ? '🏁 Super gefahren!' : '🏁 Ziel erreicht'),
         el('div', { class: 'stars', 'aria-label': `${r.stars} von 3 Sternen` }, '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars)),
         el('p', { class: 'big' }, `${r.score} Punkte`),
-        el('p', {}, `Zeit ${fmtTime(g.car.time)} (gut: ${fmtTime(g.m.parS)}) · Fehler ${g.mistakes} · Hinweise ${g.hints}`),
+        el('p', {}, `Zeit ${fmtTime(g.car.time)} (gut: ${fmtTime(g.m.parS)}) · Fehler ${g.mistakes} · Hinweise ${g.hints}${g.violations ? ` · Fahrverbote ${g.violations}` : ''}`),
         el('p', { class: 'hint' }, r.stars >= 2 ? `«${t.name}» kommt in der Lernkarte weiter nach oben.` : `«${t.name}» kommt bald wieder dran – üben lohnt sich.`),
         el('button', { class: 'btn primary big', type: 'button', 'data-act': 'next', onclick: () => start({}) }, 'Neue Mission'),
         el('button', { class: 'btn big', type: 'button', onclick: () => start({ targetId: t.id, startId: s.id }) }, 'Nochmal dieselbe'),
@@ -248,7 +260,7 @@ export function initGame(ctx) {
 
   function finish() {
     g.state = 'done'; g.car.v = 0;
-    g.rating = G.rate(g.m, { seconds: g.car.time, mistakes: g.mistakes, hints: g.hints, speedingS: g.car.speedingS });
+    g.rating = G.rate(g.m, { seconds: g.car.time, mistakes: g.mistakes, hints: g.hints, violations: g.violations, speedingS: g.car.speedingS });
     const t = g.m.target, ok = g.rating.stars >= 2;
     store.mutateProgress((pr) => ctx.progress.answer(pr, t.id, ok));        // Lernstand: Zielort wird sicherer oder bleibt schwach
     const key = `${g.m.start.id}>${t.id}`, best = { ...(store.state.settings.gameBest || {}) };

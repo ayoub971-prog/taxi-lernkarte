@@ -29,8 +29,8 @@ export function initMap3d(ctx) {
   function loadScript() {
     if (window.maplibregl) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=4'; document.head.append(link);
-      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=4';
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=5'; document.head.append(link);
+      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=5';
       s.onload = () => resolve(); s.onerror = () => reject(new Error('maplibre-script'));
       document.head.append(s);
     });
@@ -63,7 +63,7 @@ export function initMap3d(ctx) {
       m.getCanvas().addEventListener('webglcontextlost', (e) => { e.preventDefault(); broken = true; ctx.glLost?.(); });
       m.on('moveend', () => moveCbs.forEach((f) => f()));
       m.on('idle', () => moveCbs.forEach((f) => f()));
-      map = m; applyLines(); if (endPos) setEnd(endPos[0], endPos[1], endLabel);
+      map = m; try { applyGates(); } catch { /* */ } applyLines(); if (endPos) setEnd(endPos[0], endPos[1], endLabel);
       return m;
     })().catch((e) => { loading = null; try { m?.remove(); box.replaceChildren(); } catch { /* */ } throw e; }));
   }
@@ -78,7 +78,7 @@ export function initMap3d(ctx) {
       m.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.95);
       m.setPaintProperty('building-3d', 'fill-extrusion-vertical-gradient', true);
     }
-    boldRoads(m);
+    boldRoads(m); banLayers(m); applyGates();
     m.setLight({ anchor: 'map', position: [1.4, 215, 38], intensity: 0.5, color: '#fff4e0' });
   }
 
@@ -94,6 +94,37 @@ export function initMap3d(ctx) {
     mk('taxi-road-casing-minor', minor, '#9aa3ad', w(1.2, 5, 22)); mk('taxi-road-fill-minor', minor, '#ffffff', w(0.6, 3.4, 18));
     mk('taxi-road-casing', major, '#5d6670', w(2.2, 8, 34)); mk('taxi-road-fill', major, ['match', ['get', 'class'], 'motorway', '#ff9a3d', 'trunk', '#ffb347', 'primary', '#ffd54f', 'secondary', '#fff0a8', '#ffffff'], w(1.4, 6, 29));
   }
+
+  /** Fahrverbot in der Fahrersicht: Wege fuer Autos verboten (Fussgaengerzone, Fuss-/Velo-/Feldwege, Treppen, Busspuren, access=no) rot-weiss gestrichelt, aus den Vektorkacheln. */
+  function banLayers(m) {
+    if (!m.getSource('openmaptiles') || m.getLayer('taxi-ban-red')) return;
+    const before = m.getStyle().layers.find((l) => l.type === 'symbol')?.id;
+    const filter = ['all', ['==', ['geometry-type'], 'LineString'], ['any', ['in', ['get', 'class'], ['literal', ['path', 'pedestrian', 'track', 'busway', 'bus_guideway']]], ['==', ['get', 'access'], 'no']]];
+    const w = (a, b, c) => ['interpolate', ['exponential', 1.5], ['zoom'], 14, a, 16, b, 18, c];
+    const base = { type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', minzoom: 14.5, filter, layout: { 'line-cap': 'butt', 'line-join': 'round' } };
+    m.addLayer({ ...base, id: 'taxi-ban-red', paint: { 'line-color': '#d32f2f', 'line-width': w(1.6, 4, 9), 'line-opacity': 0.95 } }, before);
+    m.addLayer({ ...base, id: 'taxi-ban-dash', paint: { 'line-color': '#ffffff', 'line-width': w(0.8, 2, 4.5), 'line-dasharray': [1.4, 1.6] } }, before);
+  }
+  // Fahrverbot-Zeichen (aus data/noentry.json und den Einbahn-Einfahrten), von restrict.js geliefert
+  let gatesData = [];
+  function signImage(kind) {
+    const S = 64, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d');
+    x.beginPath(); x.arc(32, 32, 28, 0, 6.2832); x.fillStyle = kind === 'noentry' ? '#d32f2f' : '#fff'; x.fill();
+    x.lineWidth = kind === 'noentry' ? 5 : 8; x.strokeStyle = kind === 'noentry' ? '#fff' : '#d32f2f'; x.stroke();
+    if (kind === 'noentry') { x.fillStyle = '#fff'; x.fillRect(14, 26, 36, 12); }
+    else { x.fillStyle = '#222'; x.beginPath(); x.moveTo(16, 38); x.lineTo(16, 32); x.lineTo(21, 24); x.lineTo(43, 24); x.lineTo(48, 32); x.lineTo(48, 38); x.closePath(); x.fill(); x.beginPath(); x.arc(23, 40, 4, 0, 6.2832); x.arc(41, 40, 4, 0, 6.2832); x.fill(); }
+    return x.getImageData(0, 0, S, S);
+  }
+  function applyGates() {
+    if (!map || !map.isStyleLoaded?.() && !map.getStyle()) return;
+    if (!map.getSource('taxi-gates')) {
+      for (const k of ['noentry', 'nocars']) if (!map.hasImage('taxi-' + k)) map.addImage('taxi-' + k, signImage(k), { pixelRatio: 2 });
+      map.addSource('taxi-gates', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({ id: 'taxi-gates-sym', type: 'symbol', source: 'taxi-gates', minzoom: 14.5, layout: { 'icon-image': ['get', 'icon'], 'icon-size': ['interpolate', ['linear'], ['zoom'], 15, 0.6, 18, 1.0], 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
+    }
+    map.getSource('taxi-gates').setData({ type: 'FeatureCollection', features: gatesData.map((g) => ({ type: 'Feature', properties: { icon: g.kind === 'einbahn' ? 'taxi-noentry' : 'taxi-nocars' }, geometry: { type: 'Point', coordinates: [g.lng, g.lat] } })) });
+  }
+  function setGates(list) { gatesData = list || []; if (map) { try { applyGates(); } catch { /* Stil noch nicht bereit: tune() holt es nach */ } } }
 
   // ------------------------------------------------------------ Linien (Routen, Fahrstrecke)
   const firstSymbol = () => map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
@@ -173,7 +204,7 @@ export function initMap3d(ctx) {
   new ResizeObserver(() => map?.resize()).observe(document.getElementById('stage'));
 
   return {
-    supported, enable3d: ENABLE_3D, setBuildings: (on) => { if (map?.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', on || ENABLE_3D ? 'visible' : 'none'); }, ensure, setPlaces, clearPlaces, closePopups, openPopup, setLocation, setEnd, setLine,
+    supported, setGates, enable3d: ENABLE_3D, setBuildings: (on) => { if (map?.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', on || ENABLE_3D ? 'visible' : 'none'); }, ensure, setPlaces, clearPlaces, closePopups, openPopup, setLocation, setEnd, setLine,
     syncFrom2D, syncTo2D, flyTo, fitPoints, follow, resetPadding,
     onMove: (f) => moveCbs.push(f),
     map: () => map, container: box, active: false, loaded: () => !!map,

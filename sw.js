@@ -5,7 +5,7 @@
 //  - 3D-Ansicht: Vektorkacheln, Stil, Schriften und Symbole von tiles.openfreemap.org werden ebenfalls nur gemerkt, wenn du sie
 //    angesehen hast (max. 600 Dateien, 7 Tage). Auch hier: kein Vorab-Laden.
 // NEUE VERSION VEROEFFENTLICHEN: VERSION erhoehen (am einfachsten: node tools/bump-version.mjs 2).
-const VERSION = '4';
+const VERSION = '5';
 const SHELL = `taxi-lernkarte-shell-v${VERSION}`;
 const TILES = 'taxi-lernkarte-tiles';
 const MAX_TILES = 400;
@@ -14,14 +14,14 @@ const MAX_VTILES = 600;
 const TILE_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
 
 const ASSETS = [
-  './', 'index.html', 'styles.css?v=4', 'manifest.webmanifest?v=4',
-  'icons/icon.svg?v=4', 'icons/icon-192.png?v=4', 'icons/icon-512.png?v=4', 'icons/icon-maskable-512.png?v=4',
-  'vendor/leaflet/leaflet.css?v=4', 'vendor/leaflet/leaflet.js?v=4',
+  './', 'index.html', 'styles.css?v=5', 'manifest.webmanifest?v=5',
+  'icons/icon.svg?v=5', 'icons/icon-192.png?v=5', 'icons/icon-512.png?v=5', 'icons/icon-maskable-512.png?v=5',
+  'vendor/leaflet/leaflet.css?v=5', 'vendor/leaflet/leaflet.js?v=5',
   'vendor/leaflet/images/layers.png', 'vendor/leaflet/images/layers-2x.png', 'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-icon-2x.png', 'vendor/leaflet/images/marker-shadow.png',
-  'js/app.js?v=4', 'js/places.js?v=4', 'js/geo.js?v=4', 'js/quiz.js?v=4', 'js/store.js?v=4', 'js/progress.js?v=4', 'js/repeat.js?v=4',
-  'js/drive.js?v=4', 'js/drivemode.js?v=4', 'js/map3d.js?v=4', 'js/labels.js?v=4', 'js/game.js?v=4', 'js/gamemode.js?v=4', 'js/overview.js?v=4', 'js/zoomctl.js?v=4', 'js/controls.js?v=4', 'js/quizmode.js?v=4', 'js/ui.js?v=4',
-  'vendor/maplibre/maplibre-gl.css?v=4', 'vendor/maplibre/maplibre-gl.js?v=4',
-  'data/routes-ab.json?v=4', 'data/pairs.json?v=4', 'data/graph.json?v=4',
+  'js/app.js?v=5', 'js/places.js?v=5', 'js/geo.js?v=5', 'js/quiz.js?v=5', 'js/store.js?v=5', 'js/progress.js?v=5', 'js/repeat.js?v=5',
+  'js/drive.js?v=5', 'js/drivemode.js?v=5', 'js/map3d.js?v=5', 'js/labels.js?v=5', 'js/game.js?v=5', 'js/gamemode.js?v=5', 'js/overview.js?v=5', 'js/zoomctl.js?v=5', 'js/restrict.js?v=5', 'js/controls.js?v=5', 'js/quizmode.js?v=5', 'js/ui.js?v=5',
+  'vendor/maplibre/maplibre-gl.css?v=5', 'vendor/maplibre/maplibre-gl.js?v=5',
+  'data/routes-ab.json?v=5', 'data/pairs.json?v=5', 'data/graph.json?v=5', 'data/noentry.json?v=5',
 ];
 
 self.addEventListener('install', (e) => {

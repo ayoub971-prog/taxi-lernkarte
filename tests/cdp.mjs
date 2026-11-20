@@ -59,7 +59,7 @@ export async function launch({ port, dbg, shots, width = 412, height = 915 }) {
     const r = await ev(`const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const b = e.getBoundingClientRect(); return {x: b.x + b.width/2, y: b.y + b.height/2, w: b.width, h: b.height}`);
     assert.ok(r, 'Element nicht gefunden: ' + sel); return r;
   }
-  async function click(sel) { const c = await center(sel); await clickAt(c.x, c.y); }
+  async function click(sel) { await ev(`const e = document.querySelector(${JSON.stringify(sel)}); if (e) { const b = e.getBoundingClientRect(); if (b.bottom > innerHeight || b.top < 0) e.scrollIntoView({block: 'center'}); }`); const c = await center(sel); await clickAt(c.x, c.y); }
   /** Echte Touch-Ereignisse. points = [{x,y,id}] (alle aktuell aufliegenden Finger). */
   const touch = (type, points) => send('Input.dispatchTouchEvent', { type, touchPoints: points.map((p) => ({ x: p.x, y: p.y, id: p.id ?? 1 })) });
 

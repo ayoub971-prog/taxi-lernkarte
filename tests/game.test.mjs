@@ -110,3 +110,52 @@ test('Falsch abbiegen wird erkannt (Fehler), Hinweis-Weg fuehrt trotzdem ans Zie
   const node = car.dir > 0 ? car.e.b : car.e.a, p = G.pathBetween(g, node, m.targetNode, 's');
   assert.ok(p && G.pathLatLngs(p.steps).length > 1);
 });
+
+// ------------------------------------------------------------------ Fahrverbot: gesperrte Ausfahrten
+const ne = JSON.parse(fs.readFileSync(path.join(root, 'data/noentry.json'), 'utf8'));
+test('noentry.json passt zum Netz: Einfahrten liegen an Knoten, Arten bekannt, nur befahrbare Anschluesse', () => {
+  assert.equal(ne.graphNodes, raw.n.length / 2);
+  const kinds = new Set(['fussgaengerzone', 'fussweg', 'veloweg', 'treppe', 'feldweg', 'busspur', 'gesperrt']);
+  assert.ok(ne.gates.length > 500 && ne.ways.length > 500);
+  for (const [n, , , b, k] of ne.gates) { assert.ok(n >= 0 && n < ne.graphNodes); assert.ok(b >= 0 && b <= 360); assert.ok(kinds.has(k), k); }
+  for (const [k, arr] of ne.ways) { assert.ok(kinds.has(k)); assert.ok(arr.length >= 4 && arr.length % 2 === 0); }
+  assert.ok(ne.ways.some(([k]) => k === 'fussgaengerzone') && ne.ways.some(([k]) => k === 'treppe') && ne.ways.some(([k]) => k === 'veloweg'));
+});
+
+test('Sperre: Abbiegen in Einbahnstrasse von hinten / verbotenen Weg wird erkannt (Event noentry), Fahren bleibt auf erlaubten Strassen', () => {
+  const blocked = G.buildBlocked(g, ne);
+  assert.ok([...blocked.values()].flat().some((b) => b.kind === 'einbahn'), 'Einbahn-Einfahrten');
+  assert.ok([...blocked.values()].flat().some((b) => b.kind !== 'einbahn'), 'Weg-Einfahrten aus noentry.json');
+  let hits = 0, sideOk = 0;
+  const seenKinds = new Set();
+  for (const [node, list] of blocked) {
+    for (const o of g.out[node]) {
+      if (o.dir === 1 ? false : g.edges[o.e.id].ow) continue;
+      for (const steer of [-1, 1]) {
+        const car = G.newCar(g, o.e.a, 0); car.e = o.e; car.dir = -o.dir; car.s = Math.max(0, o.e.total - 0.2); car.v = 4;
+        if (car.dir === -1 && o.e.ow) continue;
+        car.steerLatch = steer; car.latchAge = 0;
+        const evs = G.step(g, car, { gas: 1, brake: 0, steer }, 0.1, { scale: 2 });
+        const j = evs.find((e) => e.type === 'junction'); if (!j || j.node !== node) continue;
+        sideOk++;
+        const ban = evs.find((e) => e.type === 'noentry');
+        if (ban) { hits++; seenKinds.add(ban.kind); assert.ok(list.some((b) => b.kind === ban.kind)); assert.ok(!j.picked.o.e.ow || j.picked.o.dir === 1, 'Auto darf nicht gegen die Einbahn fahren'); }
+        // ohne Lenk-Absicht kein Fahrverbot
+        const car2 = G.newCar(g, o.e.a, 0); car2.e = o.e; car2.dir = -o.dir; car2.s = Math.max(0, o.e.total - 0.2); car2.v = 4;
+        assert.ok(!G.step(g, car2, { gas: 1, brake: 0, steer: 0 }, 0.1, { scale: 2 }).some((e) => e.type === 'noentry'));
+      }
+    }
+    if (hits > 40) break;
+  }
+  assert.ok(hits >= 10, `zu wenige Faelle erkannt: ${hits} von ${sideOk}`);
+  assert.ok(seenKinds.has('einbahn'));
+});
+
+test('Wertung: Fahrverbote kosten 100 Punkte und den dritten Stern', () => {
+  const m = { parS: 100 };
+  const a = G.rate(m, { seconds: 100, mistakes: 0, hints: 0, speedingS: 0 }), b = G.rate(m, { seconds: 100, mistakes: 0, hints: 0, speedingS: 0, violations: 1 });
+  assert.equal(a.stars, 3); assert.equal(a.score - b.score, 100); assert.equal(b.stars, 2);
+});
+test('wrongWayGates: Zeichen nur an Kreuzungen', () => {
+  const w = G.wrongWayGates(g); assert.ok(w.length > 100 && w.length < g.edges.length); assert.ok(w.every((x) => x.kind === 'einbahn' && isFinite(x.lat)));
+});

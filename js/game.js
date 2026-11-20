@@ -4,8 +4,25 @@
 //   - An Kreuzungen waehlt die Lenk-Eingabe (links / geradeaus / rechts) den Abzweig, der am besten passt.
 //   - Gas/Bremse steuern das Tempo, vor Kreuzungen bremst eine kleine Fahrhilfe automatisch ab.
 //   - Missionen: "Fahre von A nach B", Kuerzester Weg (Dijkstra) fuer Hinweis, Punkte und Sterne.
-import { distanceM } from './geo.js?v=4';
-import { posAt, bearing, angleDiff } from './drive.js?v=4';
+import { distanceM } from './geo.js?v=5';
+import { posAt, bearing, angleDiff } from './drive.js?v=5';
+
+/** Verbotene Ausfahrten an Kreuzungen: Einbahnstrassen von hinten (aus dem Graphen) und Wege aus data/noentry.json (nur wenn zum Graphen passend).
+ *  Ergebnis g.blocked: Map Knoten -> [{ bearing, kind }]. Daran erkennt step(), wenn jemand in einen verbotenen Weg abbiegen will. */
+export function buildBlocked(g, ne) {
+  const map = new Map(), add = (n, bearing, kind) => { (map.get(n) || map.set(n, []).get(n)).push({ bearing, kind }); };
+  for (const e of g.edges) if (e.ow) add(e.b, edgeHeading(e, e.total, -1), 'einbahn');
+  if (ne && ne.graphNodes === g.nodes.length) for (const [n, , , b, k] of ne.gates) if (n >= 0) add(n, b, k);
+  g.blocked = map;
+  return map;
+}
+/** Einbahn-Einfahrten (Gegenrichtung) fuer die Zeichen auf der Karte: nur an echten Kreuzungen (mind. 3 Strassenenden). */
+export function wrongWayGates(g) {
+  const deg = new Map(); for (const e of g.edges) { deg.set(e.a, (deg.get(e.a) || 0) + 1); deg.set(e.b, (deg.get(e.b) || 0) + 1); }
+  const out = [];
+  for (const e of g.edges) if (e.ow && (deg.get(e.b) || 0) >= 3) { const p = edgePos(e, Math.max(0, e.total - 6), 1); out.push({ lat: p.lat, lng: p.lng, kind: 'einbahn' }); }
+  return out;
+}
 
 /** Tempolimit (km/h) wenn OSM keinen Wert hat – grobe Annahme je Strassenklasse (siehe graph.cls). */
 export const DEFAULT_KMH = [100, 80, 50, 50, 50, 50, 50, 20];
@@ -200,6 +217,13 @@ export function step(g, car, input, dt, opts = {}) {
       const chosen = pick.o.e.len + opts.distTo[pick.o.to];
       if (opt.list.length > 1 && isFinite(best) && chosen - best > 80) events.push({ type: 'mistake', node: opt.node, extra: chosen - best });
     }
+    if (g.blocked && steer) {   // will die Person in einen verbotenen Weg / eine Einbahnstrasse von hinten abbiegen?
+      const inH = edgeHeading(car.e, car.e.total, car.dir);
+      for (const b of g.blocked.get(opt.node) || []) {
+        const ang = angleDiff(inH, b.bearing), side = steer < 0 ? ang < -30 && ang > -155 : ang > 30 && ang < 155;
+        if (side && !opt.list.some((x) => Math.abs(angleDiff(x.angle, ang)) < 40)) { events.push({ type: 'noentry', node: opt.node, kind: b.kind }); break; }
+      }
+    }
     events.push(ev);
     car.e = pick.o.e; car.dir = pick.o.dir; car.s = over; car.lastNode = opt.node;
     car.steerLatch = 0; car.latchAge = 99;
@@ -248,10 +272,11 @@ export function makeMission(g, places, { targetId, startId, rnd = Math.random, w
 /** Punkte und Sterne am Ende. stats = { seconds, mistakes, hints, speedingS }. */
 export function rate(m, stats) {
   const over = Math.max(0, stats.seconds - m.parS);
-  const score = Math.max(100, Math.round(1000 - over * 4 - stats.mistakes * 120 - stats.hints * 150 - stats.speedingS * 8));
+  const score = Math.max(100, Math.round(1000 - over * 4 - stats.mistakes * 120 - stats.hints * 150 - stats.speedingS * 8 - (stats.violations || 0) * 100));
+  const bad = stats.mistakes + (stats.violations || 0);   // Fehler + Fahrverbote
   let stars = 1;
-  if (stats.seconds <= m.parS * 2.6 + 30 && stats.mistakes <= 2) stars = 2;
-  if (stats.seconds <= m.parS * 1.7 + 15 && stats.mistakes === 0 && stats.hints === 0) stars = 3;
+  if (stats.seconds <= m.parS * 2.6 + 30 && bad <= 2) stars = 2;
+  if (stats.seconds <= m.parS * 1.7 + 15 && bad === 0 && stats.hints === 0) stars = 3;
   return { score, stars };
 }
 
