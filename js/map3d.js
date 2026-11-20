@@ -6,6 +6,7 @@
 // Die 2D-Karte (Leaflet) bleibt immer im Hintergrund bestehen: Quiz, Pruefung und Tippen laufen dort.
 export const ENABLE_3D = false || new URLSearchParams(location.search).get('3d') === '1';
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+export const SAT_URL = 'https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg';
 export const PITCH_MAP = 55;      // Neigung auf der normalen Karte
 export const PITCH_DRIVE = 58;    // Neigung im Fahrmodus (Blick von hinten auf das Auto)
 
@@ -29,8 +30,8 @@ export function initMap3d(ctx) {
   function loadScript() {
     if (window.maplibregl) return Promise.resolve();
     return new Promise((resolve, reject) => {
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=5'; document.head.append(link);
-      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=5';
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = 'vendor/maplibre/maplibre-gl.css?v=6'; document.head.append(link);
+      const s = document.createElement('script'); s.src = 'vendor/maplibre/maplibre-gl.js?v=6';
       s.onload = () => resolve(); s.onerror = () => reject(new Error('maplibre-script'));
       document.head.append(s);
     });
@@ -61,6 +62,7 @@ export function initMap3d(ctx) {
       tune(m);
       // iOS/Android koennen den WebGL-Kontext im Hintergrund entziehen: dann sauber auf 2D zurueckfallen
       m.getCanvas().addEventListener('webglcontextlost', (e) => { e.preventDefault(); broken = true; ctx.glLost?.(); });
+      m.on('dragstart', (e) => { if (e.originalEvent) ctx.onUserPan?.(); });
       m.on('moveend', () => moveCbs.forEach((f) => f()));
       m.on('idle', () => moveCbs.forEach((f) => f()));
       map = m; try { applyGates(); } catch { /* */ } applyLines(); if (endPos) setEnd(endPos[0], endPos[1], endLabel);
@@ -79,6 +81,8 @@ export function initMap3d(ctx) {
       m.setPaintProperty('building-3d', 'fill-extrusion-vertical-gradient', true);
     }
     boldRoads(m); banLayers(m); applyGates();
+    try { applySat(m); } catch { /* */ }
+    try { applyLabels(m); } catch { /* */ }
     m.setLight({ anchor: 'map', position: [1.4, 215, 38], intensity: 0.5, color: '#fff4e0' });
   }
 
@@ -125,6 +129,46 @@ export function initMap3d(ctx) {
     map.getSource('taxi-gates').setData({ type: 'FeatureCollection', features: gatesData.map((g) => ({ type: 'Feature', properties: { icon: g.kind === 'einbahn' ? 'taxi-noentry' : 'taxi-nocars' }, geometry: { type: 'Point', coordinates: [g.lng, g.lat] } })) });
   }
   function setGates(list) { gatesData = list || []; if (map) { try { applyGates(); } catch { /* Stil noch nicht bereit: tune() holt es nach */ } } }
+
+  // ------------------------------------------------------------ Satellit (swisstopo SWISSIMAGE)
+  // Rasterquelle unter allen Vektorebenen. Flaechen (Land, Wasser, Gebaeude) werden ausgeblendet, Strassen halbdurchsichtig,
+  // Namen, Fahrverbot-Linien, Zeichen und Routenlinien bleiben voll sichtbar. Quelle: © swisstopo (OGD, ohne Schluessel).
+  const satSaved = new Map();
+  function applySat(m = map) {
+    if (!m || !m.getStyle()) return;
+    const on = ctx.store.state.settings.satellite === true;
+    if (!m.getSource('swisstopo')) {
+      m.addSource('swisstopo', { type: 'raster', tiles: [SAT_URL], tileSize: 256, minzoom: 8, maxzoom: 20, attribution: '© swisstopo' });
+      const first = m.getStyle().layers.find((l) => l.type !== 'background')?.id;
+      m.addLayer({ id: 'taxi-sat', type: 'raster', source: 'swisstopo', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } }, first);
+    }
+    m.setLayoutProperty('taxi-sat', 'visibility', on ? 'visible' : 'none');
+    for (const l of m.getStyle().layers) {
+      if (l.id === 'taxi-sat' || /^(taxi-ban|taxi-gates|ln-)/.test(l.id)) continue;
+      const keep = satSaved.get(l.id) || {};
+      if (l.type === 'fill' || l.type === 'fill-extrusion') {
+        if (on && keep.vis === undefined) { keep.vis = m.getLayoutProperty(l.id, 'visibility') ?? 'visible'; satSaved.set(l.id, keep); }
+        if (keep.vis !== undefined) m.setLayoutProperty(l.id, 'visibility', on ? 'none' : keep.vis);
+      } else if (l.type === 'line') {
+        if (on && keep.op === undefined) { keep.op = m.getPaintProperty(l.id, 'line-opacity') ?? 1; satSaved.set(l.id, keep); }
+        if (keep.op !== undefined) m.setPaintProperty(l.id, 'line-opacity', on ? 0.5 : keep.op);
+      }
+    }
+  }
+  function setSatellite() { if (map) { try { applySat(); } catch { /* Stil noch nicht bereit */ } } }
+
+  // Strassennamen an den naechsten Abzweigen (Navi): Textebene ueber einer GeoJSON-Quelle
+  let labelData = [];
+  function applyLabels(m = map) {
+    if (!m || !m.getStyle()) return;
+    if (!m.getSource('taxi-turn-labels')) {
+      m.addSource('taxi-turn-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      m.addLayer({ id: 'taxi-turn-labels', type: 'symbol', source: 'taxi-turn-labels', layout: { 'text-field': ['get', 't'], 'text-font': ['Noto Sans Bold'], 'text-size': 17, 'text-anchor': 'left', 'text-offset': [0.9, -0.9], 'text-allow-overlap': true, 'text-ignore-placement': true, 'text-max-width': 12 },
+        paint: { 'text-color': '#2b1f9e', 'text-halo-color': '#ffffff', 'text-halo-width': 2.4 } });
+    }
+    m.getSource('taxi-turn-labels').setData({ type: 'FeatureCollection', features: labelData.map((p) => ({ type: 'Feature', properties: { t: p.text }, geometry: { type: 'Point', coordinates: [p.lng, p.lat] } })) });
+  }
+  function setLabels(list) { labelData = list || []; if (map) { try { applyLabels(); } catch { /* Stil noch nicht bereit */ } } }
 
   // ------------------------------------------------------------ Linien (Routen, Fahrstrecke)
   const firstSymbol = () => map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
@@ -204,7 +248,7 @@ export function initMap3d(ctx) {
   new ResizeObserver(() => map?.resize()).observe(document.getElementById('stage'));
 
   return {
-    supported, setGates, enable3d: ENABLE_3D, setBuildings: (on) => { if (map?.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', on || ENABLE_3D ? 'visible' : 'none'); }, ensure, setPlaces, clearPlaces, closePopups, openPopup, setLocation, setEnd, setLine,
+    supported, setGates, setSatellite, setLabels, enable3d: ENABLE_3D, setBuildings: (on) => { if (map?.getLayer('building-3d')) map.setLayoutProperty('building-3d', 'visibility', on || ENABLE_3D ? 'visible' : 'none'); }, ensure, setPlaces, clearPlaces, closePopups, openPopup, setLocation, setEnd, setLine,
     syncFrom2D, syncTo2D, flyTo, fitPoints, follow, resetPadding,
     onMove: (f) => moveCbs.push(f),
     map: () => map, container: box, active: false, loaded: () => !!map,

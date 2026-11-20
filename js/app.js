@@ -1,20 +1,22 @@
 // Taxi-Lernkarte – Hauptprogramm: Karte, Pins, Orte-Liste, eigene Orte, Sicherung, Navigation.
 // Quiz/Pruefung steckt in quizmode.js, der Fahrmodus in drivemode.js. Beide bekommen das Objekt `ctx`.
-import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=5';
-import { distanceM, formatDistance } from './geo.js?v=5';
-import { createStore, makeBackup, parseBackup } from './store.js?v=5';
-import * as progress from './progress.js?v=5';
-import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=5';
-import { initQuiz } from './quizmode.js?v=5';
-import { initDrive } from './drivemode.js?v=5';
-import { initGame } from './gamemode.js?v=5';
-import { initOverview } from './overview.js?v=5';
-import { initZoomCtl } from './zoomctl.js?v=5';
-import { initRestrict } from './restrict.js?v=5';
-import { initMap3d } from './map3d.js?v=5';
-import { layoutLabels, labelPriority } from './labels.js?v=5';
+import { PLACES, STUFEN, TYP_ICON, filterPlaces, BOX } from './places.js?v=6';
+import { distanceM, formatDistance } from './geo.js?v=6';
+import { createStore, makeBackup, parseBackup } from './store.js?v=6';
+import * as progress from './progress.js?v=6';
+import { $, $$, el, toast, confirmDialog, speak } from './ui.js?v=6';
+import { initQuiz } from './quizmode.js?v=6';
+import { initDrive } from './drivemode.js?v=6';
+import { initGame } from './gamemode.js?v=6';
+import { initOverview } from './overview.js?v=6';
+import { initZoomCtl } from './zoomctl.js?v=6';
+import { initRestrict } from './restrict.js?v=6';
+import { initSat } from './sat.js?v=6';
+import { initNaviUi } from './navi.js?v=6';
+import { initMap3d } from './map3d.js?v=6';
+import { layoutLabels, labelPriority } from './labels.js?v=6';
 
-export const APP_VERSION = '5';
+export const APP_VERSION = '6';
 const L = window.L;
 
 // ---------------------------------------------------------------- Speicher
@@ -29,7 +31,7 @@ try { navigator.storage?.persist?.(); } catch { /* optional */ }
 const map = L.map('map', { zoomControl: false, zoomSnap: 0.5, maxZoom: 19, minZoom: 9, tap: true });
 L.control.zoom({ position: 'bottomleft', zoomInTitle: 'Vergrössern', zoomOutTitle: 'Verkleinern' }).addTo(map);
 map.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, crossOrigin: true, updateInterval: 120, keepBuffer: 4,
   attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende',
 }).addTo(map);
@@ -203,7 +205,7 @@ $('#btn-labels').addEventListener('click', () => { store.setSetting('labels', !(
 
 // ---------------------------------------------------------------- Routen A / B (Lernskizze)
 let routesPromise = null;
-function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=5').then((r) => r.json()); }
+function loadRoutesAB() { return routesPromise ??= fetch('data/routes-ab.json?v=6').then((r) => r.json()); }
 const routeLayers = {};
 const ROUTE_STYLE = {
   A: { color: '#1565c0', weight: 5, title: 'Variante A – Autobahn A3' },
@@ -417,6 +419,9 @@ ctx.quiz = initQuiz(ctx);
 ctx.overview = initOverview(ctx);
 ctx.zoomctl = initZoomCtl(ctx);
 ctx.restrict = initRestrict(ctx);
+ctx.osmLayer = osmLayer;
+ctx.sat = initSat(ctx);
+ctx.naviUi = initNaviUi(ctx);
 ctx.drive = initDrive(ctx);
 ctx.game = initGame(ctx);
 applyLabels(); renderMarkers(); renderList(); renderBars(); showView('karte'); syncViewBtn(); applyView();

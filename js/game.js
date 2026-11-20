@@ -4,8 +4,8 @@
 //   - An Kreuzungen waehlt die Lenk-Eingabe (links / geradeaus / rechts) den Abzweig, der am besten passt.
 //   - Gas/Bremse steuern das Tempo, vor Kreuzungen bremst eine kleine Fahrhilfe automatisch ab.
 //   - Missionen: "Fahre von A nach B", Kuerzester Weg (Dijkstra) fuer Hinweis, Punkte und Sterne.
-import { distanceM } from './geo.js?v=5';
-import { posAt, bearing, angleDiff } from './drive.js?v=5';
+import { distanceM } from './geo.js?v=6';
+import { posAt, bearing, angleDiff } from './drive.js?v=6';
 
 /** Verbotene Ausfahrten an Kreuzungen: Einbahnstrassen von hinten (aus dem Graphen) und Wege aus data/noentry.json (nur wenn zum Graphen passend).
  *  Ergebnis g.blocked: Map Knoten -> [{ bearing, kind }]. Daran erkennt step(), wenn jemand in einen verbotenen Weg abbiegen will. */
@@ -285,3 +285,34 @@ export function arrived(car, target, r = ARRIVE_M) { return distanceM(carPos(car
 
 /** Wie weit ist das Ziel (Luftlinie) und in welcher Himmelsrichtung. */
 export function toTarget(car, target) { const p = carPos(car); return { dist: distanceM(p, target), bearing: bearing(p, target) }; }
+
+// ------------------------------------------------------------------ Navi: Manoever entlang des kuerzesten Wegs
+/**
+ * Manoever vom Standort des Autos zum Zielknoten (kuerzester Weg in Sekunden, wie der Hinweis).
+ * Rueckgabe: { maneuvers:[{ s, kind:'turn'|'ziel', angle, name }], pts:[[lat,lng]…] (Linie ab Auto), total } oder null.
+ * s ist der Weg in Metern ab der Autoposition. Ein Manoever gibt es nur an echten Entscheidungen
+ * (mind. 1 Alternative und Winkel >= 20 Grad, oder Winkel >= 60 Grad). secs = Fahrzeit bei Tempolimit, cs = car.s bei der Berechnung.
+ */
+export function pathManeuvers(g, car, targetNode, targetName = '') {
+  const node0 = car.dir > 0 ? car.e.b : car.e.a;
+  const path = node0 === targetNode ? { steps: [] } : pathBetween(g, node0, targetNode, 's');
+  if (!path) return null;
+  const rem = Math.max(0, car.e.total - car.s);
+  // Linie: Rest der aktuellen Kante, dann der Weg
+  const pts = [];
+  const e0 = car.e, here = carPos(car);
+  pts.push([here.lat, here.lng]);
+  if (car.dir > 0) { for (let i = 0; i < e0.pts.length; i++) if (e0.cum[i] > car.s) pts.push([e0.pts[i].lat, e0.pts[i].lng]); }
+  else { for (let i = e0.pts.length - 1; i >= 0; i--) if (e0.cum[i] < e0.total - car.s) pts.push([e0.pts[i].lat, e0.pts[i].lng]); }
+  pts.push(...pathLatLngs(path.steps));
+  const maneuvers = []; let s = rem, inE = car.e, inDir = car.dir;
+  for (const st of path.steps) {
+    const node = inDir > 0 ? inE.b : inE.a;
+    const angle = angleDiff(edgeHeading(inE, inE.total, inDir), edgeHeading(st.e, 0, st.dir));
+    const alts = g.out[node].filter((o) => !(o.e === inE && o.dir === -inDir) && !(o.e === st.e && o.dir === st.dir)).length;
+    if ((alts >= 1 && Math.abs(angle) >= 20) || Math.abs(angle) >= 60) maneuvers.push({ s, kind: 'turn', angle, name: st.e.name || '', lat: g.nodes[node].lat, lng: g.nodes[node].lng });
+    s += st.e.total; inE = st.e; inDir = st.dir;
+  }
+  maneuvers.push({ s, kind: 'ziel', angle: 0, name: targetName, lat: g.nodes[targetNode].lat, lng: g.nodes[targetNode].lng });
+  return { maneuvers, pts, total: s, secs: (path.cost || 0) + rem / 13.9, cs: car.s };
+}

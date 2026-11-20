@@ -16,7 +16,12 @@ Du bist Entwickler:in für eine kleine, **kostenlose** Web-App. Halte dich an di
 8. Nach jeder Änderung **Version erhöhen** (siehe Abschnitt 7), sonst sehen Handy und iPad die neue Version nicht.
 9. Sag ehrlich, was du **nicht** testen konntest (echtes Samsung, echtes iPad).
 
-## 1b. Stand: Fahrersicht an, 3D-Gebäude AUS, Fahrverbot-Markierung (Version 5)
+## 1b. Stand: Fahrersicht an, 3D-Gebäude AUS, Fahrverbot-Markierung (Version 5), Navi-Look + Satellit (Version 6)
+
+* **Navi-Look (ab Version 6):** `js/navi.js` (rein, Node-getestet in `tests/navi.test.mjs`): `turnKey(angle)` → Pfeil-Art, `naviBanner(manöver, s, {dest})` → Text/Pfeil/«Dann», `etaInfo`, `arrowSvg`, `driveManeuvers` (aus OSRM-Schritten, Fahrmodus). Im Spiel berechnet `game.js` `pathManeuvers(g, car, targetNode, name)` die Manöver und die Route vom Standort (kürzester Weg in Sekunden, gleiche Dijkstra wie «Neu berechnen»); `gamemode.js` `updateNavi()` rechnet neu, sobald die Kante oder Richtung des Autos wechselt (`g.nav = {key, res, man, line}`), zeichnet die Route (`#5b3df5`, Leaflet + `gl.setLine('navi')`) und füllt Karte `#game-navi`, Leiste `#game-eta`. Navi-Hilfe an/aus: `settings.gameNavi` (Pause-Menü, `#app[data-navi]`). Fahrmodus: `d.man` aus `driveManeuvers`, Karte `#drive-hud` (IDs `#turn-text`, `#turn-dist`, `#street-now` bleiben), Leiste `#drive-eta`, Tacho `#drive-speed` (zeigt konstant 50 km/h = Simulationstempo). Etiketten an Abzweigen: `ctx.naviUi.setLabels` (Leaflet `.turn-label`, MapLibre-Ebene `taxi-turn-labels`, Schrift «Noto Sans Bold» aus dem OpenFreeMap-Stil).
+* **Layout (Version 6):** nur CSS am Ende von `styles.css` («Version 6: Navi-Look»): Seitenknoepfe `.side-btn` mit `--i` (Hochformat: Spalte rechts; Querformat: Reihe oben rechts), Zoom darunter, Abbiegekarte + Meta in `.navi-col`/`.g-top`, Tacho und «Zentrieren» hängen mit `bottom: 100%` an `#drive-bottom` bzw. `#game-bottom` (kein Überlappen bei wechselnder Höhe), Minikarte links unter der Karte (flaches Querformat: oben Mitte). `tests/browser-navi.mjs` prüft Überdeckungen/«im Bild» für 360×740, 915×412, 412×915, 1024×768, 1366×1024 (Spiel- und Fahrmodus). Wer Elemente hinzufügt, nimmt sie in `GAME_SELS`/`DRIVE_SELS` auf.
+* **Zentrieren:** `ctx.freeLook` (nur Fahrersicht): MapLibre-`dragstart` mit `originalEvent` → `ctx.onUserPan` → Kamera folgt nicht mehr, das Auto wird mit `ctx.placeCarFree` an seiner Geo-Position gezeichnet, `.recenter` erscheint; Tipp darauf, Zoomknopf oder Pinch → `setFreeLook(false)` und `viewListeners` setzen die Kamera neu.
+* **Satellit:** `js/sat.js` (`ctx.sat`, `ctx.osmLayer`), URL `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/{z}/{x}/{y}.jpeg` (`SAT_URL` in `map3d.js`). Leaflet: Kachelebene statt OSM. MapLibre: Rasterquelle `swisstopo` + Ebene `taxi-sat` direkt über dem Hintergrund (`map3d.js` `applySat`): Flächen (fill/fill-extrusion) aus, Linien (Strassen) auf Deckkraft 0.5, **nicht** angefasst werden `taxi-ban*`, `taxi-gates*`, `ln-*` und alle Textebenen. Service Worker: eigener Cache `taxi-lernkarte-satellite` (max. 400, 7 Tage). Lizenz/Quellenangabe siehe Abschnitt 5.
 
 * **Fahrverbot (ab Version 5):** `data/graph.json` enthält nur befahrbare Strassen (access/motor_vehicle=no|private sind ausgeschlossen, Einbahnen als Kanten ohne Rückrichtung `ow`). Deshalb kann das Spielauto nie in einen verbotenen Weg fahren. Verbotene Wege kommen aus `data/noentry.json` (gebaut mit `tools/fetch-noentry-raw.sh` + `tools/build-noentry.mjs`: Fusswege, Velowege, Wege, Treppen, Feldwege, Reitwege, Busways, Fussgängerzonen, access/motor_vehicle=no; nur Stücke ±90 m um Graph-Knoten, Douglas-Peucker 2 m; `gates` = `[Knotenindex, lat·1e5, lng·1e5, Peilung, Art]`). `js/restrict.js` (`ctx.restrict`: start/stop/update/isActive) zeichnet in der 2D-Karte rot-weisse Linien (`#d32f2f` + weiss gestrichelt) und `.ban-sign`-Zeichen im Umkreis (Zeichen 260 m, Linien 420 m, Update höchstens alle 1 s/40 m). In der Fahrersicht zeichnet `map3d.js` die Linien direkt aus den OpenFreeMap-Vektorkacheln (Quelle `openmaptiles`, Ebene `transportation`: class path/pedestrian/track/busway oder access=no, Ebenen `taxi-ban-red`/`taxi-ban-dash`) und die Zeichen als GeoJSON-Ebene `taxi-gates-sym` (`setGates`). Einbahn-Pfeile kommen vom Stil «liberty» selbst; das Zeichen «Einfahrt verboten» in Gegenrichtung stammt aus dem Graph (nur Spielmodus).
 * **Sperre (nur Spielmodus):** `game.js` `buildBlocked` (Knoten → gesperrte Peilungen aus Einbahnköpfen und Gates) und im `step()` das Ereignis `noentry`, wenn an einer Kreuzung zu einer gesperrten Seite gelenkt wird und kein erlaubter Ast innerhalb 40° liegt. `gamemode.js`: Zähler `violations`, Banner `#ban-alert`, Ton, Vibration, `rate()` zieht 100 Punkte pro Verstoss ab. Das Taxi bleibt auf erlaubter Kante.
@@ -40,7 +45,7 @@ Du bist Entwickler:in für eine kleine, **kostenlose** Web-App. Halte dich an di
 
 * **Live:** <https://ayoub971-prog.github.io/taxi-lernkarte/>
 * **Repo (öffentlich):** <https://github.com/ayoub971-prog/taxi-lernkarte> (Branch `main`, GitHub Pages veröffentlicht den Ordner `/` automatisch nach jedem Push, dauert ca. 1 Minute).
-* **Aktuelle Version:** 5 (`VERSION` in `sw.js`, `APP_VERSION` in `js/app.js`, `?v=5` in HTML und Modulen).
+* **Aktuelle Version:** 6 (`VERSION` in `sw.js`, `APP_VERSION` in `js/app.js`, `?v=6` in HTML und Modulen).
 * Lizenz: MIT.
 
 ## 4. Architektur
@@ -81,6 +86,8 @@ Du bist Entwickler:in für eine kleine, **kostenlose** Web-App. Halte dich an di
 | `js/labels.js` | Namen ohne Überlappung |
 | `js/game.js`, `js/gamemode.js`, `js/controls.js` | Spielmodus (siehe oben) |
 | `js/restrict.js` | Fahrverbot-Markierung (2D-Linien, Zeichen, Daten für die Fahrersicht) |
+| `js/navi.js` | Navi-Look (Manöver, Banner, Restzeit, Etiketten, Zentrieren) |
+| `js/sat.js` | Satellit (swisstopo) |
 | `js/overview.js` | Übersichtskarte und Minikarte |
 | `js/zoomctl.js` | Zoom während der Fahrt (Knöpfe, Pinch, Mausrad, Tasten) |
 | `js/store.js`, `js/ui.js` | localStorage (Schlüssel `taxi-lernkarte-v1`), kleine DOM-Helfer, Sprachausgabe |
@@ -99,18 +106,20 @@ Du bist Entwickler:in für eine kleine, **kostenlose** Web-App. Halte dich an di
 | **OpenFreeMap** `tiles.openfreemap.org` (Stil «liberty») | 3D-Gebäude und Vektorkarte | Gratis, **ohne Schlüssel und Konto** (Stand 19.11.2026, <https://openfreemap.org/tos/>). Pflicht-Quellenangabe «OpenFreeMap © OpenMapTiles, Daten von OpenStreetMap» (steht in der Karte). Automatisches Abgreifen verboten, Offline-Download nur bis 3000 Kacheln/50 MB, max. 4 parallel, eigener User-Agent. Die App lädt nur, was angezeigt wird. Dienst ohne Garantie, kann wegfallen (dann 2D). Vektordaten © OpenMapTiles (CC-BY 4.0) und OSM (ODbL). |
 | **OSM-Daten über Overpass** (`overpass.openstreetmap.fr`) | einmalig für `data/graph.json` | ODbL. Nur zur Bauzeit, 6 Abfragen mit 20 s Pause, eigener User-Agent. Die App fragt nie selber Overpass. |
 | **OSM-Daten über Overpass** (zweite Abfrage) | einmalig für `data/noentry.json` | wie oben (ODbL, 6 Abfragen, 20 s Pause, eigener User-Agent). Die App fragt auch dafür nie selber. |
+| **swisstopo SWISSIMAGE** (`wmts.geo.admin.ch`, WMTS 3857, Zoom bis 20) | Satellit-Knopf | Kostenlose Geodaten (OGD): freie Nutzung auch kommerziell, **Quellenangabe «© swisstopo» Pflicht** (<https://www.swisstopo.admin.ch/de/nutzungsbedingungen-kostenlose-geodaten-und-geodienste>, Stand 20.11.2026). Kein Schlüssel, kein Konto. Fair Use BGDI: 1'200 Anfragen/Minute (<https://www.geo.admin.ch/de/allgemeine-nutzungsbedingungen-bgdi/>), bei übermässiger Nutzung kann der Zugang eingeschränkt werden. Laden nur sichtbarer Kacheln, kein Vorab-Laden. |
 | **OSRM-Demo-Server** | einmalig für `data/routes-ab.json` | Wenige Abfragen von Hand, Daten bleiben im Repo. |
 | **Nominatim** | einmalig für Adressen/Koordinaten der Orte | 1 Abfrage pro Sekunde, eigener User-Agent. |
 | **Leaflet** (BSD-2), **MapLibre GL JS** (BSD-3) | Karten-Bibliotheken | Lizenzdateien liegen in `vendor/`. |
 
-Die App selber ruft im Betrieb **nur** `tile.openstreetmap.org` und `tiles.openfreemap.org` auf. Der Test `tests/static.test.mjs` prüft, dass im Code keine anderen Server stehen.
+Die App selber ruft im Betrieb **nur** `tile.openstreetmap.org`, `tiles.openfreemap.org` und (Satellit) `wmts.geo.admin.ch` auf. Der Test `tests/static.test.mjs` prüft, dass im Code keine anderen Server stehen.
 
 ## 6. Tests ausführen
 
 ```bash
-npm test                              # Node-Tests (34): Orte, Quiz, Lernstand, Routen, Service Worker, Spiel-Kern (Graph, Dijkstra, Physik, Autopilot, Missionen)
+npm test                              # Node-Tests (41): Orte, Quiz, Lernstand, Routen, Service Worker, Spiel-Kern (Graph, Dijkstra, Physik, Autopilot, Missionen)
 node tests/browser-smoke.mjs          # echter Chrome headless, 2D, Handyformat, Screenshots nach /workspace/taxi-shots
 node tests/browser-2d.mjs             # Auslieferung ohne 3D: Namen, Spielmodus 2D (Touch, Mehrfinger), Zoom während der Fahrt, Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate (12 Schritte)
+node tests/browser-navi.mjs          # Navi-Look: Banner, Neuberechnung, Layout ohne Überdeckung (5 Grössen), Satellit 2D + Fahrersicht, Zentrieren (braucht Internet für Fahrersicht/Satellit)
 node tests/browser-ban.mjs           # Fahrverbot: Panel, «Selber steuern», Sperre, Markierung 2D und Fahrersicht (Fahrersicht braucht Internet)
 node tests/browser-view.mjs           # Fahrersicht (braucht Internet): Bearing = Heading, Pitch, Umschalter, Fallback, Zoom, Übersicht, Layouts, Bildrate
 node tests/browser-3d.mjs             # alte 3D-Ansicht (öffnet die App mit ?3d=1) 3D, Namen, Fahrmodus 3D, Spielmodus mit echten Touch-Ereignissen, Übersicht, Minikarte, iPad-/Handy-Layouts, Bildrate; Screenshots nach /workspace/taxi-shots/v2 (SHOTS_DIR änderbar)
@@ -126,7 +135,7 @@ python3 tests/webkit-smoke.py         # WebKit (Playwright): Fehler, Layout, Tou
 ## 7. Neue Version veröffentlichen
 
 1. Änderungen machen, `npm test` und die Browser-Tests laufen lassen.
-2. `node tools/bump-version.mjs 6` (Zahl = neue Version; aktuell ist 5). Das setzt `VERSION` in `sw.js`, `APP_VERSION` in `js/app.js` und alle `?v=` in `index.html`, `manifest.webmanifest` und den Modulen.
+2. `node tools/bump-version.mjs 7` (Zahl = neue Version; aktuell ist 6). Das setzt `VERSION` in `sw.js`, `APP_VERSION` in `js/app.js` und alle `?v=` in `index.html`, `manifest.webmanifest` und den Modulen.
 3. `git add -A && git commit -m "..." && git push` (Branch `main`). GitHub Pages baut automatisch.
 4. Prüfen: <https://ayoub971-prog.github.io/taxi-lernkarte/sw.js> zeigt die neue `VERSION`; Dateien wie `js/app.js?v=5` geben 200.
 5. Auf Handy/iPad die App einmal ganz schliessen und neu öffnen (Service Worker wechselt beim zweiten Start). Bei Manifest-Änderungen (z. B. Ausrichtung) die installierte App neu installieren.

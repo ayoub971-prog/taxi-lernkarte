@@ -2,13 +2,14 @@
 // Gas / Bremse / Links / Rechts als Bildschirm-Knoepfe (Multitouch), per Gamepad oder Tastatur.
 // Mission: "Fahre zum Paradeplatz" – Pfeil und Distanz zeigen die Richtung, am Ende gibt es Punkte und Sterne.
 // Rechenkern: game.js (Node-getestet). Eingabe: controls.js. Kamera: 3D hinter dem Auto (MapLibre) oder 2D gedreht (Leaflet).
-import { KIND_TEXT } from './restrict.js?v=5';
-import * as G from './game.js?v=5';
-import { createControls } from './controls.js?v=5';
-import { angleDiff } from './drive.js?v=5';
-import { formatDistance, distanceM } from './geo.js?v=5';
-import { STUFEN } from './places.js?v=5';
-import { $, el, toast } from './ui.js?v=5';
+import { KIND_TEXT } from './restrict.js?v=6';
+import * as G from './game.js?v=6';
+import { createControls } from './controls.js?v=6';
+import { angleDiff } from './drive.js?v=6';
+import { formatDistance, distanceM } from './geo.js?v=6';
+import { STUFEN } from './places.js?v=6';
+import { naviBanner, renderBanner, etaInfo } from './navi.js?v=6';
+import { $, el, toast } from './ui.js?v=6';
 
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const ARROW = { links: '◀', geradeaus: '▲', rechts: '▶' };
@@ -23,6 +24,7 @@ export function initGame(ctx) {
   const set = (k, d) => store.state.settings[k] ?? d;
   const haptics = () => set('haptics', true) !== false;
   const sound = () => set('sound', false) === true;
+  const naviOn = () => set('gameNavi', true) !== false;
   const scaleSetting = () => Math.min(4, Math.max(1, Number(set('gameScale', 2)) || 2));
 
   /** Grosse Warnung «Fahrverbot» (Zeichen + Text), blendet nach 2.2 s aus. */
@@ -54,7 +56,7 @@ export function initGame(ctx) {
 
   // ------------------------------------------------------------ Strassennetz laden
   function loadGraph() {
-    return (graphP ??= Promise.all([fetch('data/graph.json?v=5').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }), ctx.restrict.load()])
+    return (graphP ??= Promise.all([fetch('data/graph.json?v=6').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }), ctx.restrict.load()])
       .then(([raw, ne]) => { const gr = G.buildGraph(raw); G.buildBlocked(gr, ne); gr.wrongWay = G.wrongWayGates(gr); return gr; })
       .catch((e) => { graphP = null; throw e; }));
   }
@@ -71,7 +73,8 @@ export function initGame(ctx) {
     const scale = scaleSetting();
     const m = G.makeMission(graph, ctx.allPlaces(), { targetId: opts.targetId, startId: opts.startId, weightOf, scale });
     if (!m) { toast('Für diese Auswahl gibt es keine Mission.'); return; }
-    g = { m, car: m.car, scale, state: 'ready', mistakes: 0, hints: 0, violations: 0, heading: G.carHeading(m.car), last: 0, hudAt: 0, nearAt: 0, near: '', opts, gamepadSeen: false };
+    g = { m, car: m.car, scale, state: 'ready', mistakes: 0, hints: 0, violations: 0, heading: G.carHeading(m.car), last: 0, hudAt: 0, nearAt: 0, near: '', opts, gamepadSeen: false, nav: { key: '', res: null, man: [], line: null } };
+    $('#app').dataset.navi = naviOn() ? '1' : '0';
     ctx.setMode('game'); ctx.setMarkersVisible(false); ctx.showView('karte');
     ctx.restrict.start(graph.wrongWay || []);
     [hud, pad, carEl].forEach((n) => { n.hidden = false; });
@@ -91,7 +94,7 @@ export function initGame(ctx) {
     cancelAnimationFrame(raf); clearTimeout(hintTimer);
     controls?.destroy(); controls = null; g = null;
     ctx.overview.close(); ctx.overview.show(false);
-    layer.clearLayers(); gl.setLine('hint', null); gl.setEnd(null); ctx.restrict.stop();
+    layer.clearLayers(); gl.setLine('hint', null); gl.setLine('navi', null); gl.setEnd(null); ctx.restrict.stop(); ctx.naviUi.setLabels([]); ctx.setFreeLook(false);
     [hud, pad, carEl, menu].forEach((n) => { n.hidden = true; });
     mapEl.style.cssText = ''; carEl.style.cssText = '';
     ctx.setMode('normal'); ctx.setMarkersVisible(true); ctx.refresh();
@@ -119,7 +122,8 @@ export function initGame(ctx) {
     ctx.restrict.update(pos, first);
     g.heading = first ? target : (g.heading + angleDiff(g.heading, target) * Math.min(1, dt * 5) + 360) % 360;
     const eff = Math.abs(car.v) * g.scale;
-    if (gl.active) gl.follow(pos.lat, pos.lng, g.heading, ctx.zoomctl.zoomGl(eff < 4 ? 17.6 : eff < 12 ? 17.1 : eff < 25 ? 16.6 : 16.1), geo.W, geo.H, geo.cx, geo.cy);
+    if (gl.active && ctx.freeLook) ctx.placeCarFree(pos, g.heading);
+    else if (gl.active) gl.follow(pos.lat, pos.lng, g.heading, ctx.zoomctl.zoomGl(eff < 4 ? 17.6 : eff < 12 ? 17.1 : eff < 25 ? 16.6 : 16.1), geo.W, geo.H, geo.cx, geo.cy);
     else {
       map.setView([pos.lat, pos.lng], ctx.zoomctl.zoom(eff < 4 ? 18 : eff < 12 ? 17 : eff < 25 ? 16.5 : 16), { animate: false });
       if (ctx.driverView()) { mapEl.style.transform = `rotate(${-g.heading}deg)`; carEl.style.transform = ''; }
@@ -127,7 +131,7 @@ export function initGame(ctx) {
     }
   }
   ctx.viewListeners.push(() => { if (g && !ctx.forceOverview) { layoutGame(); frame(true); } });
-  setTimeout(() => ctx.zoomctl.onChange(() => { if (g && !ctx.forceOverview) frame(false, 0); }), 0);
+  setTimeout(() => ctx.zoomctl.onChange(() => { if (g && !ctx.forceOverview) { if (ctx.freeLook) ctx.setFreeLook(false); else frame(false, 0); } }), 0);
   addEventListener('resize', () => { if (g && !ctx.forceOverview) { layoutGame(); frame(true); } });
 
   // ------------------------------------------------------------ Hauptschleife
@@ -170,6 +174,7 @@ export function initGame(ctx) {
     $('#g-cdist').textContent = formatDistance(tt.dist);
     $('#g-arrow').style.transform = `rotate(${angleDiff(g.heading, tt.bearing)}deg)`;
     $('#g-time').textContent = `⏱ ${fmtTime(car.time)}   ✖ ${g.mistakes}${g.hints ? `   🧭 ${g.hints}` : ''}${g.violations ? `   ⛔ ${g.violations}` : ''}`;
+    updateNavi(force);
     const la = G.lookAhead(graph, car, lastInput.steer || 0), box = $('#g-junction');
     if (la.dist < 140 && car.v >= 0 && la.options.length > 0 && (la.options.length > 1 || la.deadEnd)) {
       const items = [...la.options].sort((a, b) => a.angle - b.angle);
@@ -178,6 +183,30 @@ export function initGame(ctx) {
       box.hidden = false;
     } else box.hidden = true;
   }
+
+  // ------------------------------------------------------------ Navi (Abbiegekarte, Route, Restzeit)
+  /** Manoever laufend vom aktuellen Standort zum Ziel; neu berechnet, sobald das Auto die Kante wechselt (auch nach Abweichen). */
+  function updateNavi(force = false) {
+    const car = g.car, n = g.nav, t = g.m.target, card = $('#game-navi');
+    if (!naviOn()) { if (n.res || n.line) { n.res = null; n.key = ''; if (n.line) { layer.removeLayer(n.line); n.line = null; } gl.setLine('navi', null); ctx.naviUi.setLabels([]); } return; }
+    const key = `${car.e.id}:${car.dir}`;
+    if (force || key !== n.key || !n.res) {
+      n.key = key;
+      n.res = G.pathManeuvers(graph, car, g.m.targetNode, t.label || t.name);
+      if (n.line) { layer.removeLayer(n.line); n.line = null; }
+      if (n.res) {
+        n.line = L.polyline(n.res.pts, { color: '#5b3df5', weight: 9, opacity: 0.95, className: 'naviline', interactive: false }).addTo(layer);
+        gl.setLine('navi', n.res.pts, { color: '#5b3df5', width: 9 });
+      } else gl.setLine('navi', null);
+    }
+    if (!n.res) { renderBanner(card, { arrow: 'wenden', distText: '', title: 'Kein Weg gefunden – wenden', dann: null }); $('#game-eta .eta-min').textContent = '–'; return; }
+    const sNow = Math.max(0, car.s - n.res.cs);   // so weit ist das Auto seit der Berechnung auf dieser Kante gefahren
+    renderBanner(card, naviBanner(n.res.maneuvers, sNow, { dest: t.label || t.name }));
+    ctx.naviUi.setLabels(ctx.naviUi.labelsFor(n.res.maneuvers, sNow));
+    const rest = Math.max(0, n.res.total - sNow), eta = etaInfo(rest, (n.res.total / Math.max(1, n.res.secs)) * g.scale);
+    $('#game-eta .eta-min').textContent = rest < 40 ? 'Am Ziel' : eta.rest; $('#game-eta .eta-sub').textContent = `${eta.dist} · Ankunft ${eta.arrive}`;
+  }
+  $('#g-x').addEventListener('click', () => togglePause());
 
   // ------------------------------------------------------------ Menues
   function showMenu(kind) {
@@ -195,6 +224,7 @@ export function initGame(ctx) {
         el('button', { class: 'btn primary big', type: 'button', 'data-act': 'resume', onclick: () => togglePause() }, 'Weiterfahren'),
         el('button', { class: 'btn big', type: 'button', onclick: () => { togglePause(); hint(); } }, '🧭 Neu berechnen (Hinweis, −150 Punkte)'),
         el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: sound() ? '' : null, onchange: (e) => store.setSetting('sound', e.target.checked) }), ' Ton'),
+        el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: naviOn() ? '' : null, onchange: (e) => { store.setSetting('gameNavi', e.target.checked); $('#app').dataset.navi = e.target.checked ? '1' : '0'; if (g) updateNavi(true); } }), ' Navi: Abbiegepfeil und Route (aus = du suchst den Weg selbst)'),
         el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: haptics() ? '' : null, onchange: (e) => store.setSetting('haptics', e.target.checked) }), ' Vibration'),
         el('label', { class: 'speed2' }, el('span', {}, `Tempo ×${g.scale} (gilt ab der nächsten Mission)`), el('input', { type: 'range', min: 1, max: 4, step: 1, value: String(scaleSetting()), onchange: (e) => store.setSetting('gameScale', Number(e.target.value)) })),
         el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: ctx.overview.enabled() ? '' : null, onchange: (e) => { ctx.overview.setEnabled(e.target.checked); ctx.overview.show(e.target.checked, openOverview); } }), ' Minikarte in der Ecke'),

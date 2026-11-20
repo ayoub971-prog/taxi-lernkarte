@@ -299,13 +299,13 @@ async function main() {
       const car = document.querySelector('#car').getBoundingClientRect(); const m = document.querySelector('#map').getBoundingClientRect();
       return {s: d.s, heading: d.heading, offRoute: best, transform: document.querySelector('#map').style.transform, zoom: __taxi.map.getZoom(),
         carCx: car.x + car.width / 2, mapCx: m.x + m.width / 2, hud: document.querySelector('#turn-text').textContent, dist: document.querySelector('#turn-dist').textContent,
-        street: document.querySelector('#street-now').textContent, info: document.querySelector('#drive-info').textContent}`);
+        street: document.querySelector('#street-now').textContent, info: document.querySelector('#eta-min').textContent + ' · ' + document.querySelector('#eta-sub').textContent}`);
     await sleep(1500); const a = await probe(); await shot('24-fahren-unterwegs-1');
     await sleep(2500); const b = await probe(); await shot('25-fahren-unterwegs-2');
     assert.ok(a.s > 100, 'Auto bewegt sich nicht: ' + a.s); assert.ok(b.s > a.s + 100, `s ${a.s} -> ${b.s}`);
     assert.ok(a.offRoute < 40 && b.offRoute < 40, `Kartenmitte nicht auf der Strecke: ${a.offRoute}, ${b.offRoute}`);
     assert.match(b.transform, /^rotate\(-?[\d.]+deg\)$/); assert.ok(Math.abs(a.carCx - a.mapCx) < 2, 'Auto liegt nicht im Drehpunkt der Karte');
-    assert.equal(b.zoom, 15, 'bei 6x Zoomstufe 15'); assert.match(b.info, /Rest .* km/);
+    assert.equal(b.zoom, 15, 'bei 6x Zoomstufe 15'); assert.match(b.info, /(Min|Std).*km.*Ankunft \d\d:\d\d/);
     // Frage waehrend der Fahrt: Auto haelt an
     await ev(`const i = document.querySelector('#drv-speed'); i.value = 10; i.dispatchEvent(new Event('input'))`);
     await waitFor('!document.querySelector("#drive-q").hidden', 40000);

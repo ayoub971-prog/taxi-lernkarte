@@ -2,10 +2,11 @@
 // ist stark herangezoomt und dreht sich in Fahrtrichtung (CSS-Drehung des Karten-Containers).
 // Oben ein Navi-Balken (Strasse, naechster Abbieger, Distanz), unten Steuerung, dazwischen
 // Pruefungsfragen ("Wohin geht es?", "Welcher Ort kommt als Naechstes?"). Alles ist Simulation.
-import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=5';
-import { recordWrong, recordRight, allKeys } from './repeat.js?v=5';
-import { formatDistance } from './geo.js?v=5';
-import { $, el, toast, speak } from './ui.js?v=5';
+import { BASE_SPEED, posAt, headingAt, angleDiff, currentStep, nextDecision, instruction, shortDist, placesAlong, planQuestions, questionText, streetName, prepRoute } from './drive.js?v=6';
+import { recordWrong, recordRight, allKeys } from './repeat.js?v=6';
+import { formatDistance } from './geo.js?v=6';
+import { naviBanner, renderBanner, etaInfo, driveManeuvers } from './navi.js?v=6';
+import { $, el, toast, speak } from './ui.js?v=6';
 
 export function initDrive(ctx) {
   const { L, map, store, gl } = ctx;
@@ -53,13 +54,14 @@ export function initDrive(ctx) {
       asked: 0, right: 0, said: {}, finished: false, last: 0, hudAt: 0, zoom: 0, pending: null,
     };
     d.qs.forEach((q) => { q.done = false; });
+    d.man = driveManeuvers(route, d.destName, { instruction, streetName, posAt });
     const pts = route.pts.map((p) => [p.lat, p.lng]);
     L.polyline(pts, { color: '#fff', weight: 14, opacity: 0.9, interactive: false }).addTo(layer);
-    L.polyline(pts, { color: '#1976d2', weight: 8, opacity: 0.9, interactive: false }).addTo(layer);
+    L.polyline(pts, { color: '#5b3df5', weight: 9, opacity: 0.95, interactive: false }).addTo(layer);
     const end = route.pts.at(-1);
-    gl.setLine('drive', pts, { color: '#1976d2', width: 8 }); gl.setEnd(end.lat, end.lng);
+    gl.setLine('drive', pts, { color: '#5b3df5', width: 9 }); gl.setEnd(end.lat, end.lng);
     L.marker([end.lat, end.lng], { icon: L.divIcon({ html: '<div style="font-size:30px;line-height:30px">🏁</div>', className: '', iconSize: [30, 30], iconAnchor: [5, 28] }), interactive: false }).addTo(layer);
-    [hud, bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = false; });
+    [hud, $('#drive-meta'), bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = false; });
     ctx.overview.show(ctx.overview.enabled(), openOverview); syncMiniBtn();
     qBox.hidden = true;
     layoutDrive();
@@ -74,7 +76,8 @@ export function initDrive(ctx) {
     cancelAnimationFrame(raf); d = null;
     layer.clearLayers(); gl.setLine('drive', null); gl.setEnd(null); ctx.restrict.stop();
     ctx.overview.close(); ctx.overview.show(false);
-    [hud, bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = true; });
+    [hud, $('#drive-meta'), bottom, car, $('#drv-3d'), $('#drv-map'), $('#drv-mm')].forEach((n) => { n.hidden = true; });
+    ctx.naviUi.setLabels([]); ctx.setFreeLook(false);
     mapEl.style.cssText = ''; car.style.cssText = '';
     try { window.speechSynthesis?.cancel(); } catch { /* optional */ }
     ctx.setMode('normal'); ctx.setMarkersVisible(true); ctx.refresh();
@@ -102,7 +105,8 @@ export function initDrive(ctx) {
     const r = d.route, pos = posAt(r, d.s), target = headingAt(r, d.s);
     ctx.restrict.update(pos, first);
     d.heading = first ? target : (d.heading + angleDiff(d.heading, target) * Math.min(1, dt * 4) + 360) % 360;
-    if (gl.active) gl.follow(pos.lat, pos.lng, d.heading, ctx.zoomctl.zoomGl(zoomFor3d(d.mul)), geo.W, geo.H, geo.cx, geo.cy);
+    if (gl.active && ctx.freeLook) ctx.placeCarFree(pos, d.heading);
+    else if (gl.active) gl.follow(pos.lat, pos.lng, d.heading, ctx.zoomctl.zoomGl(zoomFor3d(d.mul)), geo.W, geo.H, geo.cx, geo.cy);
     else {
       map.setView([pos.lat, pos.lng], ctx.zoomctl.zoom(zoomFor(d.mul)), { animate: false });
       if (ctx.driverView()) { mapEl.style.transform = `rotate(${-d.heading}deg)`; car.style.transform = ''; }
@@ -115,21 +119,18 @@ export function initDrive(ctx) {
     const r = d.route, s = d.s;
     const cur = currentStep(r, s), nd = nextDecision(r, s);
     $('#street-now').textContent = streetName(cur) ? `Sie fahren auf: ${streetName(cur)}` : 'Sie fahren geradeaus';
-    if (d.finished) { $('#turn-text').textContent = 'Ziel erreicht'; $('#turn-dist').textContent = '🏁'; }
-    else if (nd) {
-      const ins = instruction(nd.step);
-      $('#turn-text').textContent = ins.text;
-      $('#turn-dist').textContent = nd.dist < 35 ? 'Jetzt' : shortDist(nd.dist);
-      $('#turn-arrow').style.transform = `rotate(${ins.angle}deg)`;
-      if (store.state.settings.voice) {
-        const i = nd.index;
-        if (nd.dist <= 300 && !d.said[i + 'a']) { d.said[i + 'a'] = 1; speak(`In ${Math.round(nd.dist / 50) * 50} Metern ${ins.text}`); }
-        else if (nd.dist <= 40 && !d.said[i + 'b']) { d.said[i + 'b'] = 1; speak(`Jetzt ${ins.text}`); }
-      }
+    renderBanner(hud, naviBanner(d.man, s, { dest: d.destName }));
+    ctx.naviUi.setLabels(ctx.naviUi.labelsFor(d.man, s));
+    if (nd && !d.finished && store.state.settings.voice) {
+      const ins = instruction(nd.step), i = nd.index;
+      if (nd.dist <= 300 && !d.said[i + 'a']) { d.said[i + 'a'] = 1; speak(`In ${Math.round(nd.dist / 50) * 50} Metern ${ins.text}`); }
+      else if (nd.dist <= 40 && !d.said[i + 'b']) { d.said[i + 'b'] = 1; speak(`Jetzt ${ins.text}`); }
     }
-    const rest = Math.max(0, r.total - s), min = Math.max(1, Math.round(rest / BASE_SPEED / 60));
+    const rest = Math.max(0, r.total - s), eta = etaInfo(rest, r.seconds > 0 ? r.total / r.seconds : BASE_SPEED);
+    $('#eta-min').textContent = d.finished ? 'Am Ziel' : eta.rest; $('#eta-sub').textContent = d.finished ? '🏁' : `${eta.dist} · Ankunft ${eta.arrive}`;
+    $('#drv-kmh').textContent = d.playing && !d.pending ? String(Math.round(BASE_SPEED * 3.6)) : '0';   // Tacho: Fahrtempo der Simulation (50 km/h), der Faktor 1–10× raffft nur die Zeit
     const near = d.along.find((a) => Math.abs(a.s - s) <= 250);
-    const info = [`Rest ${formatDistance(rest)} · ca. ${min} Min.`];
+    const info = [];
     if (near) {
       info.push(`📍 Sie passieren: ${near.place.label || near.place.name}`);
       if (store.state.settings.voice && !d.said['p' + near.place.id] && Math.abs(near.s - s) <= 120) { d.said['p' + near.place.id] = 1; speak(`Sie passieren ${near.place.label || near.place.name}`); }
@@ -184,7 +185,7 @@ export function initDrive(ctx) {
   addEventListener('resize', () => { if (d && !ctx.forceOverview) layoutDrive(); });
   // 2D <-> 3D waehrend der Fahrt: Layout und Kamera neu setzen
   ctx.viewListeners.push(() => { if (d && !ctx.forceOverview) { layoutDrive(); frame(true); } });
-  setTimeout(() => ctx.zoomctl.onChange(() => { if (d && !ctx.forceOverview) frame(false, 0, performance.now()); }), 0);
+  setTimeout(() => ctx.zoomctl.onChange(() => { if (d && !ctx.forceOverview) { if (ctx.freeLook) ctx.setFreeLook(false); else frame(false, 0, performance.now()); } }), 0);
   // Uebersichtskarte (pausiert die Fahrt) und Minikarte
   function openOverview() {
     if (!d || d.pending || d.finished) return toast(d?.pending ? 'Erst die Frage beantworten.' : 'Die Fahrt ist zu Ende.');

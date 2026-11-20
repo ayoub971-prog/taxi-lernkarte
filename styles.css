@@ -336,3 +336,142 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 #ban-alert b { display: block; font-size: 26px; line-height: 1.1; } #ban-alert small { display: block; font-size: 14px; font-weight: 700; color: #333; }
 #ban-alert.show { animation: banpop .25s ease-out; } @keyframes banpop { from { transform: translateX(-50%) scale(.6); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
 @media (orientation: landscape) and (max-height: 520px) { #ban-alert { top: 78px; padding: 4px 14px 4px 8px; } #ban-alert b { font-size: 22px; } #ban-alert .ban-ico svg { width: 36px; height: 36px; } }
+
+/* ======================================================================
+   Version 6: Navi-Look (Fahrmodus und Spielmodus)
+   Oben links Abbiegekarte + Meta, rechts Seitenknoepfe, links unten Tacho, unten weisse Leiste (Restzeit).
+   Hochformat: Seitenknoepfe als Spalte rechts. Querformat: als Reihe oben rechts.
+   ====================================================================== */
+:root { --t0: calc(8px + env(safe-area-inset-top, 0px)); --sbw: 62px; --sbh: 60px; --sstep: 68px; --sl: calc(8px + env(safe-area-inset-left, 0px)); --sr: calc(10px + env(safe-area-inset-right, 0px)); }
+@media (min-width: 900px) and (min-height: 700px) { :root { --sbw: 72px; --sbh: 68px; --sstep: 78px; } }
+
+/* Seitenknoepfe (Fahrersicht/Norden, Satellit, Karte, Mini bzw. Pause) */
+#app .side-btn { position: absolute; z-index: 730; width: var(--sbw); height: var(--sbh); min-width: 0; min-height: 0; padding: 2px; border-radius: 16px; border: 2px solid #fff; background: #1d232af2;
+  color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; font-weight: 800; box-shadow: 0 2px 8px #0006; pointer-events: auto;
+  top: calc(var(--t0) + var(--i, 0) * var(--sstep)); right: var(--sr); left: auto; }
+#app .side-btn[hidden] { display: none; }
+#app .side-btn b { font-size: 24px; line-height: 1; font-weight: 400; }
+#app .side-btn small { font-size: 11px; font-weight: 800; line-height: 1.15; text-align: center; }
+#drv-3d, #g-view { --i: 0; } #sat-btn { --i: 1; } #drv-map, [data-pad=map].side-btn { --i: 2; } #drv-mm, [data-pad=pause].side-btn { --i: 3; }
+#app .side-btn[aria-pressed="true"].sat-btn { background: #0b6b3af2; }
+#app:not([data-mode="drive"]):not([data-mode="game"]) #sat-btn { display: none; }
+#app[data-overview="1"] .side-btn, #app[data-overview="1"] .navi-col, #app[data-overview="1"] .navi-card, #app[data-overview="1"] #game-bottom, #app[data-overview="1"] #game-hud .g-top { display: none !important; }
+#app[data-overview="1"] #game-hud .gbtn.side-btn { display: none !important; }
+.tool.sat-btn b { font-size: 22px; line-height: 1; font-weight: 400; }
+.tool.sat-btn span { font-size: 10px; }
+@media (orientation: landscape) { #app .side-btn { top: var(--t0); right: calc(10px + (3 - var(--i, 0)) * var(--sstep) + env(safe-area-inset-right, 0px)); } }
+@media (orientation: landscape) and (max-height: 520px) { :root { --sbw: 58px; --sbh: 56px; --sstep: 64px; } #app .side-btn b { font-size: 21px; } #app .side-btn small { font-size: 10px; } }
+
+/* Zoom-Knoepfe rechts unter den Seitenknoepfen */
+#zoom-ctl { left: auto; right: var(--sr); top: calc(var(--t0) + 4 * var(--sstep) + 4px); }
+#zoom-ctl button { width: var(--sbw); height: 56px; border-radius: 16px; border: 2px solid #fff; font-size: 34px; }
+#zoom-ctl button[data-z=reset] { height: 44px; }
+@media (orientation: landscape) { #zoom-ctl { top: calc(var(--t0) + var(--sstep) + 4px); } }
+@media (orientation: landscape) and (max-height: 520px) { #zoom-ctl { gap: 6px; } }
+
+/* Abbiegekarte oben links */
+.navi-col, .g-top { position: absolute; left: var(--sl); top: var(--t0); z-index: 730; width: min(430px, calc(100% - var(--sl) - var(--sbw) - 22px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; padding: 0; background: none; }
+.navi-card { background: #0b5d3b; color: #fff; border-radius: 18px; box-shadow: 0 3px 12px #0009; overflow: hidden; }
+.navi-card[hidden] { display: none; }
+.nmain { display: flex; align-items: center; gap: 10px; padding: 8px 12px; min-height: 84px; }
+.nleft { flex: none; display: flex; flex-direction: column; align-items: center; min-width: 66px; }
+.na svg { display: block; width: 56px; height: 56px; }
+.nd { font-size: 21px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+.nt { font-size: 22px; font-weight: 800; line-height: 1.15; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.nthen { display: flex; align-items: center; gap: 8px; background: #08472d; padding: 4px 14px; font-size: 18px; font-weight: 800; min-height: 36px; }
+.nthen[hidden] { display: none; }
+.nthen svg { display: block; width: 28px; height: 28px; }
+.navi-meta { align-self: flex-start; max-width: 100%; background: #10161cdd; color: #fff; border-radius: 14px; padding: 5px 12px; font-size: 16px; font-weight: 800; box-shadow: 0 2px 8px #0006; }
+.navi-meta[hidden] { display: none; }
+#street-now { display: block; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-meta { display: flex; flex-direction: column; gap: 1px; }
+.g-meta .g-mission { display: flex; flex-direction: row; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.g-meta .g-mission b { font-size: 17px; line-height: 1.2; } .g-meta .g-mission span { font-size: 14px; opacity: .9; }
+.g-meta .g-street { position: static; display: flex; flex-direction: row; align-items: baseline; gap: 8px; text-align: left; flex-wrap: wrap; }
+.g-meta .g-street b { font-size: 16px; text-shadow: none; } .g-meta .g-street small { font-size: 13px; background: none; padding: 0; margin: 0; opacity: .85; }
+.g-meta .g-compass { position: absolute; width: 0; height: 0; overflow: hidden; }   /* Kompass bleibt im DOM (Tests), die Abbiegekarte ersetzt ihn */
+#app:not([data-navi="1"]) .g-meta .g-compass { position: static; width: auto; height: auto; overflow: visible; flex-direction: row; gap: 6px; min-width: 0; }
+#app:not([data-navi="1"]) #game-navi { display: none; }
+#app[data-navi="1"] #g-junction { display: none; }
+#app[data-mode="game"] #g-junction { top: calc(var(--t0) + 150px); }
+
+/* Tacho (rund) und «Zentrieren» ueber der unteren Leiste */
+.tacho { position: absolute; left: 2px; bottom: calc(100% + 8px); width: 76px; height: 76px; border-radius: 50%; background: #10161cf2; border: 3px solid #fff; color: #fff; box-shadow: 0 3px 10px #0008;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; transform: none; padding: 0; gap: 0; }
+.tacho b { font-size: 30px; line-height: 1; min-width: 0; text-align: center; font-weight: 800; } .tacho small { font-size: 11px; opacity: .85; line-height: 1; margin-top: 1px; }
+.tacho .limit { position: absolute; right: -14px; top: -10px; }
+.recenter { position: absolute; left: 90px; bottom: calc(100% + 18px); min-height: 52px; padding: 0 18px; border-radius: 26px; border: 2px solid #fff; background: #1565c0; color: #fff; font-size: 19px; font-weight: 800; box-shadow: 0 3px 10px #0008; pointer-events: auto; }
+.recenter[hidden] { display: none; }
+
+/* Untere weisse Leiste: Restzeit gross in Gruen, Meter/km und Ankunft, ✕ */
+.eta-bar { display: flex; align-items: center; gap: 10px; background: #fff; color: #1b2128; border-radius: 20px 20px 0 0; padding: 6px 12px; min-height: 60px; box-shadow: 0 -2px 10px #0006; pointer-events: auto; }
+.eta-t { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+.eta-min { font-size: 27px; font-weight: 800; color: #1b873f; white-space: nowrap; }
+.eta-sub { font-size: 16px; font-weight: 700; color: #4a545e; white-space: nowrap; }
+.eta-x { flex: none; width: 50px; height: 50px; border-radius: 50%; border: 0; background: #e6e9ec; color: #222; font-size: 24px; font-weight: 800; padding: 0; }
+.eta-x:active { background: #ccd1d6; }
+
+/* Fahrmodus: untere Flaeche */
+#drive-bottom { padding: 0 0 var(--safe-b); z-index: 740; pointer-events: none; }
+#drive-bottom > * { pointer-events: auto; }
+#drive-bottom .tacho, #drive-bottom .recenter { position: absolute; }
+#drive-bottom #drv-self { width: calc(100% - 16px); margin: 0 8px 6px; }
+#drive-q { margin: 0 8px 8px; }
+#drive-info { border-radius: 12px; margin: 0 8px 4px; }
+#drive-info:empty { display: none; }
+#drive-controls { border-radius: 0; padding: 6px 8px; }
+.drive-disc { background: #1b2128e6; padding: 2px 8px calc(2px + var(--safe-b)); font-size: 11px; text-shadow: none; }
+#drive-bottom #drv-self[hidden] { display: none; }
+
+/* Spielmodus: untere Flaeche (Tacho, Zentrieren, Leiste) sitzt ueber der Steuerung (Hochformat) bzw. zwischen den Knoepfen (Querformat) */
+#game-bottom { position: absolute; left: 0; right: 0; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); z-index: 740; pointer-events: none; }
+#game-bottom > * { pointer-events: auto; }
+#game-bottom .eta-bar { margin: 0 8px; border-radius: 20px; min-height: 54px; }
+#game-bottom .tacho { left: 10px; bottom: calc(100% + 8px); }
+#game-bottom .recenter { left: 98px; }
+#game-hud .g-speed { position: absolute; transform: none; }
+@media (orientation: portrait) and (max-width: 440px) { #game-bottom { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); } .g-speed { bottom: calc(100% + 8px); } }
+@media (orientation: landscape) {
+  #game-bottom { left: 316px; right: 252px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  #game-bottom .eta-bar { margin: 0; border-radius: 20px; }
+  #game-bottom .tacho { left: 0; }
+  #game-bottom .recenter { left: 86px; }
+}
+@media (min-width: 900px) and (min-height: 700px) and (orientation: landscape) { #game-bottom { left: 380px; right: 320px; } }
+@media (orientation: landscape) and (max-height: 520px) {
+  .nmain { min-height: 70px; padding: 5px 10px; } .na svg { width: 46px; height: 46px; } .nleft { min-width: 56px; }
+  .nd { font-size: 18px; } .nt { font-size: 19px; -webkit-line-clamp: 2; } .nthen { min-height: 30px; font-size: 16px; padding: 2px 12px; } .nthen svg { width: 24px; height: 24px; }
+  .navi-col, .g-top { width: min(360px, calc(100% - var(--sl) - 4 * var(--sstep) - 20px)); }
+  .navi-meta { font-size: 14px; padding: 3px 10px; } .g-meta .g-mission b { font-size: 15px; } .g-meta .g-street b { font-size: 14px; }
+  .eta-bar { min-height: 52px; padding: 4px 10px; } .eta-min { font-size: 24px; } .eta-sub { font-size: 14px; } .eta-x { width: 44px; height: 44px; }
+  .tacho { width: 66px; height: 66px; } .tacho b { font-size: 26px; }
+  #drive-bottom { right: calc(var(--sr) + var(--sbw) + 8px); }
+}
+@media (min-width: 900px) and (min-height: 700px) { .nmain { min-height: 96px; } .na svg { width: 64px; height: 64px; } .nt { font-size: 26px; } .nd { font-size: 24px; } .nthen { font-size: 21px; } .eta-min { font-size: 32px; } .eta-sub { font-size: 18px; } .tacho { width: 88px; height: 88px; } .tacho b { font-size: 34px; } .navi-meta { font-size: 18px; } }
+
+/* Minikarte: Hochformat und Tablets links unter der Abbiegekarte, flaches Querformat oben in der Mitte */
+#app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { left: var(--sl); top: calc(var(--t0) + 214px); width: 120px; height: 120px; }
+@media (min-width: 900px) and (min-height: 700px) { #app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { top: calc(var(--t0) + 250px); width: 150px; height: 150px; } }
+@media (orientation: landscape) and (max-height: 520px) { #app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { left: 50%; margin-left: -40px; top: var(--t0); width: 100px; height: 100px; } }
+
+/* Warnung «Fahrverbot» in der Bildmitte, nicht ueber der Abbiegekarte */
+#ban-alert { top: 40%; }
+@media (orientation: landscape) and (max-height: 520px) { #ban-alert { top: 34%; } }
+#app:has(#drive-q:not([hidden])) #minimap { display: none; }
+.turn-label { pointer-events: none; }
+.turn-label span { position: absolute; left: 10px; top: -26px; white-space: nowrap; font-size: 15px; font-weight: 800; color: #2b1f9e; background: #ffffffee; border-radius: 8px; padding: 1px 7px; box-shadow: 0 1px 4px #0005; }
+#app #drive-hud.navi-card { position: relative; inset: auto; display: block; padding: 0; gap: 0; z-index: auto; background: #0b5d3b; box-shadow: 0 3px 12px #0009; }
+#app #drive-hud.navi-card[hidden] { display: none; }
+#app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { top: calc(var(--t0) + 236px); }
+@media (min-width: 900px) and (min-height: 700px) { #app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { top: calc(var(--t0) + 270px); } }
+@media (orientation: landscape) and (max-height: 520px) { #app[data-mode="drive"] #minimap, #app[data-mode="game"] #minimap { margin-left: -50px; top: var(--t0); } }
+/* Fahrmodus im Querformat (Handy und iPad): schmale Flaeche rechts unten, «Selber steuern» neben der Restzeit-Leiste */
+@media (orientation: landscape) {
+  #drive-bottom { left: auto; right: calc(var(--sr) + var(--sbw) + 8px); width: min(560px, 62%); display: grid; grid-template-columns: 1fr 1.3fr; align-items: stretch; }
+  #drive-bottom > #drive-q, #drive-bottom > #drive-info, #drive-bottom > #drive-controls, #drive-bottom > .drive-disc { grid-column: 1 / -1; }
+  #drive-bottom > #drive-q { grid-row: 1; } #drive-bottom > #drive-info { grid-row: 2; }
+  #drive-bottom > #drv-self { grid-row: 3; grid-column: 1; width: auto; margin: 0 6px 0 0; min-height: 60px; border-radius: 20px 20px 0 0; font-size: 18px; padding: 0 8px; }
+  #drive-bottom > #drive-eta { grid-row: 3; grid-column: 2; }
+  #drive-bottom > #drive-controls { grid-row: 4; } #drive-bottom > .drive-disc { grid-row: 5; }
+}
+@media (orientation: landscape) and (max-height: 520px) { #drive-bottom { width: min(500px, 55%); } #drive-meta { max-width: 290px; } }

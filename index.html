@@ -12,11 +12,11 @@
   <meta name="theme-color" content="#b71c1c">
   <meta name="referrer" content="strict-origin-when-cross-origin"><!-- OSM verlangt einen Referer fuer Kacheln -->
   <meta name="description" content="Orte lernen für die Taxi-Prüfung: Wädenswil bis Zürich auf OpenStreetMap, mit Quiz.">
-  <link rel="manifest" href="manifest.webmanifest?v=5">
-  <link rel="icon" href="icons/icon.svg?v=5" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icons/icon-192.png?v=5">
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=5">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="manifest" href="manifest.webmanifest?v=6">
+  <link rel="icon" href="icons/icon.svg?v=6" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png?v=6">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
 <div id="app" data-view="karte" data-mode="normal">
@@ -29,6 +29,7 @@
     <div id="map-tools">
       <button id="btn-locate" class="tool" type="button" aria-label="Mein Standort">📍<span>Standort</span></button>
       <button id="btn-3d" class="tool" type="button" aria-pressed="false" aria-label="3D-Ansicht ein oder aus">🧊<span>3D</span></button>
+      <button id="btn-sat" class="tool sat-btn" type="button" aria-pressed="false" aria-label="Satellit oder Karte"><b>🛰️</b><span>Satellit</span></button>
       <button id="btn-labels" class="tool" type="button" aria-pressed="true" aria-label="Namen ein oder aus">🏷️<span>Namen</span></button>
       <button id="btn-route-a" class="tool route-a" type="button" aria-pressed="false" aria-label="Variante A Autobahn anzeigen">A<span>Autobahn</span></button>
       <button id="btn-route-b" class="tool route-b" type="button" aria-pressed="false" aria-label="Variante B Seestrasse anzeigen">B<span>Seestrasse</span></button>
@@ -44,46 +45,62 @@
     <div id="car" hidden aria-hidden="true">
       <svg viewBox="0 0 40 70" width="40" height="70"><rect x="4" y="3" width="32" height="64" rx="10" fill="#f9c80e" stroke="#6b5200" stroke-width="2"/><rect x="9" y="14" width="22" height="12" rx="3" fill="#2b3a4a"/><rect x="9" y="42" width="22" height="14" rx="3" fill="#2b3a4a"/><rect x="14" y="0" width="12" height="6" rx="2" fill="#fff" stroke="#6b5200" stroke-width="1.5"/></svg>
     </div>
-    <button id="drv-3d" class="view-toggle" type="button" aria-pressed="true" aria-label="Fahrersicht oder Karte mit Norden oben" hidden><b>🧭</b><small>Norden oben</small></button>
-    <button id="drv-map" class="drv-side" type="button" aria-label="Übersichtskarte" hidden>🗺️<small>Karte</small></button>
-    <button id="drv-mm" class="drv-side" type="button" aria-pressed="false" aria-label="Minikarte ein oder aus" hidden>◱<small>Mini</small></button>
+    <button id="drv-3d" class="side-btn view-toggle" type="button" aria-pressed="true" aria-label="Fahrersicht oder Karte mit Norden oben" hidden><b>🧭</b><small>Norden oben</small></button>
+    <button id="drv-map" class="drv-side side-btn" type="button" aria-label="Übersichtskarte" hidden><b>🗺️</b><small>Karte</small></button>
+    <button id="drv-mm" class="drv-side side-btn" type="button" aria-pressed="false" aria-label="Minikarte ein oder aus" hidden><b>◱</b><small>Mini</small></button>
     <div id="zoom-ctl" role="group" aria-label="Karte zoomen">
       <button type="button" data-z="in" aria-label="Karte vergrössern">+</button>
       <button type="button" data-z="out" aria-label="Karte verkleinern">−</button>
       <button type="button" data-z="reset" aria-label="Zurück auf Standard-Zoom" hidden>⟲<small>Standard</small></button>
     </div>
-    <div id="drive-hud" hidden>
-      <div class="turn"><svg id="turn-arrow" viewBox="0 0 24 24" width="44" height="44"><path d="M12 3 L19 12 H14 V21 H10 V12 H5 Z" fill="#fff"/></svg><span id="turn-dist"></span></div>
-      <div class="txt"><div id="turn-text"></div><div id="street-now"></div></div>
+    <button id="sat-btn" class="sat-btn side-btn" type="button" aria-pressed="false" aria-label="Satellit oder Karte"><b>🛰️</b><small>Satellit</small></button>
+    <div id="drive-top" class="navi-col">
+    <div id="drive-hud" class="navi-card" hidden>
+      <div class="nmain"><div class="nleft"><span class="na"></span><b class="nd" id="turn-dist"></b></div><div class="nt" id="turn-text"></div></div>
+      <div class="nthen" hidden>Dann: <span class="nk"></span></div>
+    </div>
+    <div id="drive-meta" class="navi-meta" hidden><b id="street-now"></b></div>
     </div>
     <div id="drive-bottom" hidden>
+      <div id="drive-speed" class="tacho"><b id="drv-kmh">0</b><small>km/h</small></div>
+      <button class="recenter" type="button" hidden>🎯 Zentrieren</button>
       <button id="drv-self" class="btn primary big" type="button">🎮 Selber steuern</button>
       <div id="drive-q" hidden></div>
       <div id="drive-info"></div>
+      <div class="eta-bar" id="drive-eta"><div class="eta-t"><b class="eta-min" id="eta-min">–</b><span class="eta-sub" id="eta-sub"></span></div><button id="drv-end" class="eta-x" type="button" aria-label="Fahrt beenden">✕</button></div>
       <div id="drive-controls">
         <button id="drv-back" class="dbtn" type="button" aria-label="Zurück">⏪</button>
         <button id="drv-play" class="dbtn main" type="button" aria-label="Start oder Pause">▶</button>
         <button id="drv-fwd" class="dbtn" type="button" aria-label="Vor">⏩</button>
         <label class="speed"><span id="drv-speed-label">3×</span><input id="drv-speed" type="range" min="1" max="10" step="1" value="3" aria-label="Geschwindigkeit"></label>
         <button id="drv-voice" class="dbtn" type="button" aria-pressed="false" aria-label="Sprachansagen">🔇</button>
-        <button id="drv-end" class="dbtn" type="button" aria-label="Fahrt beenden">✕</button>
       </div>
-      <div class="drive-disc">Simulation zum Lernen, kein echtes Navi.<br>Karte: © OpenStreetMap-Mitwirkende · OpenFreeMap</div>
+      <div class="drive-disc">Simulation zum Lernen, kein echtes Navi.<br>Karte: © OpenStreetMap-Mitwirkende · OpenFreeMap · Satellit: © swisstopo</div>
     </div>
 
     <!-- Spielmodus "Selber fahren" -->
     <div id="ban-alert" hidden role="alert"><span class="ban-ico"><svg viewBox="0 0 32 32" width="46" height="46"><circle cx="16" cy="16" r="14" fill="#d32f2f" stroke="#fff" stroke-width="2.5"/><rect x="7" y="13" width="18" height="6" rx="1" fill="#fff"/></svg></span><div><b>Fahrverbot</b><small></small></div></div>
     <div id="game-hud" hidden>
       <div class="g-top">
-        <div class="g-mission"><b id="g-goal"></b><span id="g-time"></span></div>
-        <div class="g-compass" aria-label="Richtung zum Ziel"><svg id="g-arrow" viewBox="0 0 24 24" width="40" height="40"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#ffd54f" stroke="#1d232a" stroke-width="1.5" stroke-linejoin="round"/></svg><span id="g-cdist"></span></div>
-        <button id="g-view" class="gbtn view-toggle" type="button" aria-pressed="true" aria-label="Fahrersicht oder Karte mit Norden oben"><b>🧭</b> <small>Norden oben</small></button>
-        <button class="gbtn" type="button" data-pad="map" aria-label="Übersichtskarte">🗺️ Karte</button>
-        <button class="gbtn" type="button" data-pad="pause" aria-label="Pause">⏸</button>
+        <div id="game-navi" class="navi-card">
+          <div class="nmain"><div class="nleft"><span class="na"></span><b class="nd"></b></div><div class="nt"></div></div>
+          <div class="nthen" hidden>Dann: <span class="nk"></span></div>
+        </div>
+        <div class="navi-meta g-meta">
+          <div class="g-mission"><b id="g-goal"></b><span id="g-time"></span></div>
+          <div class="g-compass" aria-label="Richtung zum Ziel"><svg id="g-arrow" viewBox="0 0 24 24" width="28" height="28"><path d="M12 2 L20 20 L12 16 L4 20 Z" fill="#ffd54f" stroke="#1d232a" stroke-width="1.5" stroke-linejoin="round"/></svg><span id="g-cdist"></span></div>
+          <div class="g-street"><b id="g-street"></b><small id="g-ort"></small></div>
+        </div>
       </div>
+      <button id="g-view" class="gbtn side-btn view-toggle" type="button" aria-pressed="true" aria-label="Fahrersicht oder Karte mit Norden oben"><b>🧭</b> <small>Norden oben</small></button>
+      <button class="gbtn side-btn" type="button" data-pad="map" aria-label="Übersichtskarte"><b>🗺️</b><small>Karte</small></button>
+      <button class="gbtn side-btn" type="button" data-pad="pause" aria-label="Pause"><b>⏸</b><small>Pause</small></button>
       <div id="g-junction" hidden></div>
-      <div class="g-street"><b id="g-street"></b><small id="g-ort"></small></div>
-      <div class="g-speed"><b id="g-kmh">0</b><small>km/h</small><span id="g-limit" class="limit" hidden></span></div>
+      <div id="game-bottom">
+        <div class="g-speed tacho"><b id="g-kmh">0</b><small>km/h</small><span id="g-limit" class="limit" hidden></span></div>
+        <button class="recenter" type="button" hidden>🎯 Zentrieren</button>
+        <div class="eta-bar" id="game-eta"><div class="eta-t"><b class="eta-min">–</b><span class="eta-sub"></span></div><button id="g-x" class="eta-x" type="button" aria-label="Pause und Menü">✕</button></div>
+      </div>
     </div>
     <div id="game-pad" hidden>
       <div class="pad-left">
@@ -209,7 +226,7 @@
       <div class="card">
         <h2>Karte &amp; Technik</h2>
         <p class="hint">Die Kartenkacheln brauchen beim ersten Mal Internet. Bereits angesehene Ausschnitte bleiben danach eine Zeit lang offline sichtbar. Die App ist gratis, ohne Werbung und ohne Konto.</p>
-        <p class="hint">Karte: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL). Darstellung mit <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>. Routen: OSRM-Demo auf OSM-Daten, einmalig gespeichert.</p>
+        <p class="hint">Karte: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende (ODbL). Darstellung mit <a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>. Routen: OSRM-Demo auf OSM-Daten, einmalig gespeichert. Satellit: Luftbild © <a href="https://www.swisstopo.admin.ch/de/nutzungsbedingungen-kostenlose-geodaten-und-geodienste" target="_blank" rel="noopener">swisstopo</a> (SWISSIMAGE, Bundesamt für Landestopografie).</p>
         <p class="hint">Version <span id="app-version"></span> · <a href="https://github.com/ayoub971-prog/taxi-lernkarte" target="_blank" rel="noopener">Quellcode (MIT)</a></p>
       </div>
     </section>
@@ -269,7 +286,7 @@
 </dialog>
 
 <noscript><p style="padding:1rem">Diese App braucht JavaScript.</p></noscript>
-<script src="vendor/leaflet/leaflet.js?v=5"></script>
-<script type="module" src="js/app.js?v=5"></script>
+<script src="vendor/leaflet/leaflet.js?v=6"></script>
+<script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

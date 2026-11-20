@@ -2,26 +2,29 @@
 //  - App-Huelle (HTML, CSS, JS, Leaflet, Routen-Daten, Icons) wird beim Installieren zwischengespeichert -> App startet offline.
 //  - OSM-Kartenkacheln: nur Kacheln, die du wirklich angesehen hast, werden gemerkt (max. 400, 7 Tage).
 //    KEIN Vorab-Laden ganzer Gebiete (OSM-Kachelregeln). Beim allerersten Ansehen eines Ausschnitts braucht es Internet.
+//  - Satellit (swisstopo SWISSIMAGE, wmts.geo.admin.ch): ebenfalls nur angesehene Kacheln (max. 400, 7 Tage), kein Vorab-Laden.
 //  - 3D-Ansicht: Vektorkacheln, Stil, Schriften und Symbole von tiles.openfreemap.org werden ebenfalls nur gemerkt, wenn du sie
 //    angesehen hast (max. 600 Dateien, 7 Tage). Auch hier: kein Vorab-Laden.
 // NEUE VERSION VEROEFFENTLICHEN: VERSION erhoehen (am einfachsten: node tools/bump-version.mjs 2).
-const VERSION = '5';
+const VERSION = '6';
 const SHELL = `taxi-lernkarte-shell-v${VERSION}`;
 const TILES = 'taxi-lernkarte-tiles';
 const MAX_TILES = 400;
 const VTILES = 'taxi-lernkarte-vtiles';
 const MAX_VTILES = 600;
+const STILES = 'taxi-lernkarte-satellite';
+const MAX_STILES = 400;
 const TILE_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
 
 const ASSETS = [
-  './', 'index.html', 'styles.css?v=5', 'manifest.webmanifest?v=5',
-  'icons/icon.svg?v=5', 'icons/icon-192.png?v=5', 'icons/icon-512.png?v=5', 'icons/icon-maskable-512.png?v=5',
-  'vendor/leaflet/leaflet.css?v=5', 'vendor/leaflet/leaflet.js?v=5',
+  './', 'index.html', 'styles.css?v=6', 'manifest.webmanifest?v=6',
+  'icons/icon.svg?v=6', 'icons/icon-192.png?v=6', 'icons/icon-512.png?v=6', 'icons/icon-maskable-512.png?v=6',
+  'vendor/leaflet/leaflet.css?v=6', 'vendor/leaflet/leaflet.js?v=6',
   'vendor/leaflet/images/layers.png', 'vendor/leaflet/images/layers-2x.png', 'vendor/leaflet/images/marker-icon.png', 'vendor/leaflet/images/marker-icon-2x.png', 'vendor/leaflet/images/marker-shadow.png',
-  'js/app.js?v=5', 'js/places.js?v=5', 'js/geo.js?v=5', 'js/quiz.js?v=5', 'js/store.js?v=5', 'js/progress.js?v=5', 'js/repeat.js?v=5',
-  'js/drive.js?v=5', 'js/drivemode.js?v=5', 'js/map3d.js?v=5', 'js/labels.js?v=5', 'js/game.js?v=5', 'js/gamemode.js?v=5', 'js/overview.js?v=5', 'js/zoomctl.js?v=5', 'js/restrict.js?v=5', 'js/controls.js?v=5', 'js/quizmode.js?v=5', 'js/ui.js?v=5',
-  'vendor/maplibre/maplibre-gl.css?v=5', 'vendor/maplibre/maplibre-gl.js?v=5',
-  'data/routes-ab.json?v=5', 'data/pairs.json?v=5', 'data/graph.json?v=5', 'data/noentry.json?v=5',
+  'js/app.js?v=6', 'js/places.js?v=6', 'js/geo.js?v=6', 'js/quiz.js?v=6', 'js/store.js?v=6', 'js/progress.js?v=6', 'js/repeat.js?v=6',
+  'js/drive.js?v=6', 'js/drivemode.js?v=6', 'js/map3d.js?v=6', 'js/labels.js?v=6', 'js/game.js?v=6', 'js/gamemode.js?v=6', 'js/overview.js?v=6', 'js/zoomctl.js?v=6', 'js/restrict.js?v=6', 'js/navi.js?v=6', 'js/sat.js?v=6', 'js/controls.js?v=6', 'js/quizmode.js?v=6', 'js/ui.js?v=6',
+  'vendor/maplibre/maplibre-gl.css?v=6', 'vendor/maplibre/maplibre-gl.js?v=6',
+  'data/routes-ab.json?v=6', 'data/pairs.json?v=6', 'data/graph.json?v=6', 'data/noentry.json?v=6',
 ];
 
 self.addEventListener('install', (e) => {
@@ -40,6 +43,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.hostname === 'tile.openstreetmap.org') return e.respondWith(tile(req, TILES, MAX_TILES));
+  if (url.hostname === 'wmts.geo.admin.ch') return e.respondWith(tile(req, STILES, MAX_STILES));   // Satellit (swisstopo): nur angesehene Kacheln, max. 400, 7 Tage
   if (url.hostname === 'tiles.openfreemap.org') {
     const isTile = /\.(pbf|png)$/.test(url.pathname) && /^\/(planet|natural_earth)\//.test(url.pathname);
     return e.respondWith(isTile ? tile(req, VTILES, MAX_VTILES) : networkFirst(req));   // Stil/TileJSON/Schriften: aktuell bevorzugen

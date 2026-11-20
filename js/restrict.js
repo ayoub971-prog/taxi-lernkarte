@@ -16,7 +16,7 @@ export function initRestrict(ctx) {
   let ne = null, loading = null, active = false, extra = [], last = { lat: 0, lng: 0, t: 0 };
 
   function load() {
-    return (loading ??= fetch('data/noentry.json?v=5').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    return (loading ??= fetch('data/noentry.json?v=6').then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then((j) => { ne = j; return j; }).catch((e) => { loading = null; console.warn('noentry.json:', e.message); return null; }));
   }
   const near = (lat, lng, p, r) => Math.abs(lat - p[0]) * M_LAT < r && Math.abs(lng - p[1]) * M_LNG < r;
